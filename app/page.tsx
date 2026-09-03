@@ -2,14 +2,11 @@
 // Homepage — SportsMole-style: All matchdays stacked vertically
 // ---------------------------------------------------------------------------
 
-import Image from "next/image";
-import Link from "next/link";
 import type { Metadata } from "next";
 import { getAvailableMatchdays, getFixturesByDateGroupedByLeague } from "@/lib/sports-api";
 import { getFootballNews } from "@/lib/news";
-import FootballMatchCard from "@/components/football/FootballMatchCard";
 import NewsSection from "@/components/football/NewsSection";
-import { ChevronRight } from "lucide-react";
+import MatchdayList from "@/components/football/MatchdayList";
 
 export const revalidate = 10800; // 3 hours
 
@@ -33,11 +30,6 @@ export const metadata: Metadata = {
     canonical: "/",
   },
 };
-
-function formatDateLabel(iso: string): string {
-  const d = new Date(iso + "T12:00:00");
-  return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-}
 
 export default async function HomePage() {
   const matchdays = await getAvailableMatchdays();
@@ -89,57 +81,7 @@ export default async function HomePage() {
           <p className="text-sm text-zinc-500">No upcoming fixtures found.</p>
         </div>
       ) : (
-        <div className="space-y-10">
-          {validMatchdays.map((matchday, idx) => (
-            <section key={matchday.date}>
-              {/* Date heading — like SportsMole's "Saturday 5th September 2026" */}
-              <h2 className="text-base font-bold text-zinc-800 mb-3 flex items-center gap-2">
-                <span className="inline-block w-2 h-2 rounded-full bg-[#002b5c]"></span>
-                {formatDateLabel(matchday.date)}
-                <span className="text-xs font-normal text-zinc-400">
-                  ({matchday.fixtureCount} match{matchday.fixtureCount !== 1 ? 'es' : ''})
-                </span>
-              </h2>
-
-              {/* League sections */}
-              <div className="space-y-6">
-                {matchday.leagues.map((league) => (
-                  <div key={league.competition}>
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2">
-                        {league.competitionLogo && (
-                          <Image src={league.competitionLogo} alt="" width={20} height={20} className="h-5 w-5" />
-                        )}
-                        <h3 className="sm-section-heading mb-0 pb-0" style={{ borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
-                          {league.competition}
-                        </h3>
-                      </div>
-                      <Link
-                        href={`/leagues/${league.competitionSlug}`}
-                        prefetch={false}
-                        className="text-[11px] font-medium flex items-center gap-0.5"
-                        style={{ color: '#002b5c' }}
-                      >
-                        Standings <ChevronRight className="h-3 w-3" />
-                      </Link>
-                    </div>
-                    <hr className="sm-divider mt-1 mb-0" />
-                    <div className="border border-zinc-200 bg-white">
-                      {league.fixtures.map((fixture) => (
-                        <FootballMatchCard key={fixture.id} fixture={fixture} />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Spacer between matchdays */}
-              {idx < validMatchdays.length - 1 && (
-                <div className="mt-8 border-t border-zinc-200" />
-              )}
-            </section>
-          ))}
-        </div>
+        <MatchdayList matchdays={validMatchdays} />
       )}
 
       {/* Latest Football News */}
