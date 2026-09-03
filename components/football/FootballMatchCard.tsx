@@ -22,6 +22,7 @@ export default function FootballMatchCard({ fixture }: FootballMatchCardProps) {
   return (
     <Link
       href={`/previews/${fixture.slug}`}
+      prefetch={false}
       className="flex items-center gap-3 border-b border-zinc-100 py-3 px-2 hover:bg-zinc-50 transition-colors last:border-b-0 group"
     >
       {/* Kickoff time / Score / Live indicator */}

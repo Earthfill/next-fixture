@@ -1,6 +1,10 @@
 // ---------------------------------------------------------------------------
 // Dynamic Sitemap — all SEO-relevant URLs
 // ---------------------------------------------------------------------------
+// IMPORTANT: Only uses static data and cached API calls to avoid rate limits.
+// Preview pages are linked from every fixture card on the homepage and fixture
+// pages, so Google will discover them through crawl links automatically.
+// ---------------------------------------------------------------------------
 import type { MetadataRoute } from "next";
 import { getAvailableMatchdays } from "@/lib/sports-api";
 
@@ -68,7 +72,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  // Fixture date pages (next 14 days)
+  // Fixture date pages — these use a cached API call and don't trigger
+  // per-fixture requests (avoids rate limiting)
   const matchdays = await getAvailableMatchdays();
   const fixturePages: MetadataRoute.Sitemap = matchdays.map((md) => ({
     url: `${SITE_URL}/fixtures/${md.slug}`,
@@ -77,26 +82,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
-  // Preview pages — fetch all fixtures across all matchdays
-  const previewSlugs = new Set<string>();
-  for (const md of matchdays) {
-    const { getFixturesByDateGroupedByLeague } = await import("@/lib/sports-api");
-    const data = await getFixturesByDateGroupedByLeague(md.slug);
-    if (data) {
-      for (const league of data.leagues) {
-        for (const fixture of league.fixtures) {
-          if (fixture.slug) previewSlugs.add(fixture.slug);
-        }
-      }
-    }
-  }
+  // Preview pages are NOT fetched here to avoid hitting API rate limits.
+  // Google discovers them via internal links from the homepage and fixture pages.
+  // Every FootballMatchCard on the homepage links to /previews/{slug}.
+  // As the sitemap regenerates hourly, preview pages will be indexed through
+  // organic crawl of those links.
 
-  const previewPages: MetadataRoute.Sitemap = Array.from(previewSlugs).map((slug) => ({
-    url: `${SITE_URL}/previews/${slug}`,
-    lastModified: new Date(),
-    changeFrequency: "daily" as const,
-    priority: 0.9,
-  }));
-
-  return [...staticPages, ...leaguePages, ...fixturePages, ...previewPages];
+  return [...staticPages, ...leaguePages, ...fixturePages];
 }

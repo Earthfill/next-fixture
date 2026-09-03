@@ -145,6 +145,7 @@ export default async function AdminPage() {
                   <td className="py-2 px-3 text-center">
                     <Link
                       href={`/previews/${f.slug}`}
+                      prefetch={false}
                       className="text-xs font-medium text-emerald-600 hover:text-emerald-700"
                     >
                       View

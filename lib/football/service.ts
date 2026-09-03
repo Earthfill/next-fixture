@@ -108,8 +108,18 @@ function apiFixtureToFixture(m: any): Fixture | null {
 
 // ─── Exported Functions ─────────────────────────────────────────────
 
+// ─── In-memory cache for getUpcomingFixtures (prevents N+1 API calls) ────
+
+let upcomingFixturesCache: { data: Fixture[]; expiresAt: number } | null = null;
+const UPCOMING_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
 export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
   if (!hasApi()) return [];
+
+  // Return cached result if still fresh
+  if (upcomingFixturesCache && Date.now() < upcomingFixturesCache.expiresAt) {
+    return upcomingFixturesCache.data;
+  }
 
   const leagues = await getCoveredLeagues();
   if (!leagues.length) return [];
@@ -131,6 +141,7 @@ export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
     }
   }
 
+  upcomingFixturesCache = { data: allFixtures, expiresAt: Date.now() + UPCOMING_TTL_MS };
   return allFixtures;
 }
 
