@@ -70,8 +70,13 @@ export default function Header() {
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">{country}</h3>
                     <div className="space-y-0.5">
                       {leagues.map((league) => (
-                        <Link key={league.slug} href={`/leagues/${league.slug}`} onClick={() => setDrawerOpen(false)}
-                          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-700 hover:text-[#002b5c] hover:bg-zinc-50 transition-colors group">
+                        <Link 
+                          key={league.slug} 
+                          href={`/leagues/${league.slug}`} 
+                          prefetch={false} 
+                          onClick={() => setDrawerOpen(false)}
+                          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-700 hover:text-[#002b5c] hover:bg-zinc-50 transition-colors group"
+                        >
                           {league.logo && <Image src={league.logo} alt="" width={20} height={20} className="h-5 w-5 object-contain" />}
                           <span className="flex-1 font-medium">{league.name}</span>
                           <ChevronRight className="h-4 w-4 text-zinc-300 group-hover:text-[#002b5c] transition-colors" />
