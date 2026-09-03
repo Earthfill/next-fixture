@@ -1,0 +1,29 @@
+// ---------------------------------------------------------------------------
+// PredictedLineupCache — Persists computed lineups across serverless invocations
+// ---------------------------------------------------------------------------
+// Usage: npx prisma generate  →  npx prisma db push
+// TTL is managed by the application layer (12 hours via lineup-service.ts).
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL") // e.g. "file:./dev.db"
+}
+
+model PredictedLineupCache {
+  id          String   @id @default(cuid())
+  teamId      Int
+  formation   String
+  startXI     Json     // JSON array of predicted players
+  substitutes Json     // JSON array of substitute players
+  confidence  String   // "high" | "medium" | "low"
+  basedOnFixtures Json? // JSON array of fixture IDs used
+  computedAt  DateTime @default(now())
+  expiresAt   DateTime
+
+  @@index([teamId])
+}

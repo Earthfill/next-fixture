@@ -1,0 +1,226 @@
+/* ─── NextFixture — SportsMole-inspired Football Preview UI ──────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=Inter:wght@400;500;600;700;800&display=swap');
+
+@import "tailwindcss";
+
+:root {
+  --sm-blue: #002b5c;
+  --sm-blue-dark: #001a3a;
+  --sm-blue-light: #003d7a;
+  --sm-accent: #e8b800;
+  --sm-accent-dark: #d4a600;
+  --sm-body: #1a1a1a;
+  --sm-muted: #555555;
+  --sm-border: #dddddd;
+  --sm-bg: #ffffff;
+  --sm-bg-alt: #f7f7f7;
+  --sm-header-height: 90px;
+}
+
+body {
+  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+  background: var(--sm-bg);
+  color: var(--sm-body);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* SportsMole-style serif for article body text */
+.sm-body {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 16px;
+  line-height: 1.75;
+  color: #222;
+}
+
+/* Section headings — bold, uppercase, bordered */
+.sm-section-heading {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--sm-blue);
+  border-bottom: 2px solid var(--sm-blue);
+  padding-bottom: 6px;
+  margin-bottom: 14px;
+}
+
+.sm-section-heading-alt {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #111;
+  border-bottom: 2px solid var(--sm-accent);
+  padding-bottom: 6px;
+  margin-bottom: 14px;
+}
+/* Sub-headings for odds markets */
+.sm-subheading {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #444;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 4px;
+}
+
+/* Small inline crests */
+.sm-crest {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  vertical-align: middle;
+  object-fit: contain;
+}
+
+.sm-crest-lg {
+  width: 36px;
+  height: 36px;
+}
+
+/* Divider */
+.sm-divider {
+  border: none;
+  border-top: 1px solid var(--sm-border);
+  margin: 20px 0;
+}
+
+/* W/D/L badges (SportsMole-style) */
+.sm-form-w {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  background: #4caf50;
+  color: white;
+}
+
+.sm-form-d {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  background: #ff9800;
+  color: white;
+}
+
+.sm-form-l {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  background: #f44336;
+  color: white;
+}
+
+/* Prediction box */
+.sm-prediction-box {
+  background: var(--sm-bg-alt);
+  border: 1px solid var(--sm-border);
+  padding: 16px 20px;
+  text-align: center;
+}
+
+.sm-prediction-score {
+  font-family: 'Inter', sans-serif;
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--sm-blue);
+  letter-spacing: -1px;
+}
+
+/* Article headings */
+.sm-heading-lg {
+  font-family: 'Playfair Display', 'Georgia', serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.2;
+}
+
+.sm-heading-md {
+  font-family: 'Playfair Display', 'Georgia', serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.3;
+}
+
+/* ─── Animations ──────────────────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+/* ─── Ad label ────────────────────────────────────────────────────── */
+/* Ad label */
+.sm-ad-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #999;
+  text-align: center;
+  display: block;
+}
+
+/* Responsive table */
+.sm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.sm-table th {
+  text-align: left;
+  padding: 8px 6px;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #666;
+  border-bottom: 1px solid var(--sm-border);
+}
+
+.sm-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid #eee;
+  vertical-align: middle;
+}
+
+.sm-table tr:last-child td {
+  border-bottom: none;
+}
+
+.sm-table tr:hover td {
+  background: #f9f9f9;
+}
