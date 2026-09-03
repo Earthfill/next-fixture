@@ -41,8 +41,6 @@ export async function getYouTubeHighlights(
     publishedAfter: date
   });
 
-  console.log(date, "Date for Youtube")
-
   try {
     const res = await fetch(`${YOUTUBE_SEARCH_URL}?${params}`, {
       next: { revalidate: 86400 }, // cache for 24 hours

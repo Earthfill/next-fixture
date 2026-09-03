@@ -18,7 +18,7 @@ const leagueNames: Record<string, string> = {
   "ligue-1": "Ligue 1", "eredivisie": "Eredivisie", "primeira-liga": "Primeira Liga",
 };
 
-export const revalidate = 3600;
+export const revalidate = 43200; // 12 hours
 
 export async function generateMetadata({ params }: { params: Promise<{ "league-slug": string }> }): Promise<Metadata> {
   const s = (await params)["league-slug"];
@@ -43,9 +43,6 @@ export async function generateMetadata({ params }: { params: Promise<{ "league-s
 export default async function LeaguePage({ params }: { params: Promise<{ "league-slug": string }> }) {
   const s = (await params)["league-slug"];
   const data = await getLeagueStandings(s);
-
-  console.log(data, "Data")
-  // if (!data) notFound();
 
   const { league, standings, upcomingFixtures } = data!;
   const scorers = await getTopScorers(s, 10);

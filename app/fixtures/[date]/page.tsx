@@ -11,7 +11,7 @@ import { getFixturesByDateGroupedByLeague } from "@/lib/sports-api";
 import FootballMatchCard from "@/components/football/FootballMatchCard";
 import { ChevronRight, Calendar } from "lucide-react";
 
-export const revalidate = 3600;
+export const revalidate = 10800; // 3 hours
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://next-fixture.com";
 

@@ -36,63 +36,31 @@ async function getCoveredLeagues(): Promise<CoveredLeague[]> {
 
   // Fetch all leagues with current season info
   const data = await apiFetch<{ response: any[] }>("/leagues?current=true");
-  if (!data?.response?.length) {
-    // Fallback: use hardcoded IDs with a default season
-    const fallbackSeason = new Date().getFullYear();
-    coveredLeaguesCache = Object.entries(LEAGUE_IDS).map(([name, id]) => ({
-      id,
-      name,
-      season: fallbackSeason,
-      hasFixtures: true,
-      hasStandings: true,
-      hasTopScorers: true, hasTopAssists: true,
-      hasPredictions: true,
-    }));
-    return coveredLeaguesCache;
-  }
+  if (!data?.response?.length) return [];
 
   // Filter to only the leagues we track (by slug/name)
-  const trackedNames = new Set(Object.keys(LEAGUE_IDS));
   const ourLeagueIds = new Set(Object.values(LEAGUE_IDS));
 
   coveredLeaguesCache = data.response
     .filter((entry: any) => {
-      const leagueName = entry.league?.name || "";
       const leagueId = entry.league?.id;
-      // Match by ID directly (our tracked leagues)
       return ourLeagueIds.has(leagueId);
     })
     .map((entry: any) => {
       const league = entry.league;
       const seasons = entry.seasons || [];
-      // Find the current season
       const currentSeason = seasons.find((s: any) => s.current === true) || seasons[0] || {};
       const coverage = currentSeason.coverage || {};
       return {
         id: league.id,
         name: league.name,
-        season: currentSeason.year || new Date().getFullYear(),
+        season: currentSeason.year || 0,
         hasFixtures: coverage.fixtures?.events || false,
         hasStandings: coverage.standings || false,
         hasTopScorers: coverage.top_scorers || false, hasTopAssists: coverage.top_assists || false,
         hasPredictions: coverage.predictions || false,
       };
     });
-
-  // If the API returned data but none of our leagues were found (e.g. wrong season),
-  // fall back to hardcoded data
-  if (!coveredLeaguesCache.length && data?.response?.length) {
-    console.warn("No tracked leagues found in API response, falling back to hardcoded data");
-    const fallbackSeason = new Date().getFullYear();
-    coveredLeaguesCache = Object.entries(LEAGUE_IDS).map(([name, id]) => ({
-      id,
-      name,
-      season: fallbackSeason,
-      hasFixtures: true, hasStandings: true,
-      hasTopScorers: true, hasTopAssists: true,
-      hasPredictions: true,
-    }));
-  }
 
   return coveredLeaguesCache;
 }
@@ -123,18 +91,8 @@ function apiFixtureToFixture(m: any): Fixture | null {
 
 // ─── Exported Functions ─────────────────────────────────────────────
 
-// ─── In-memory cache for getUpcomingFixtures (prevents N+1 API calls) ────
-
-let upcomingFixturesCache: { data: Fixture[]; expiresAt: number } | null = null;
-const UPCOMING_TTL_MS = 10 * 60 * 1000; // 10 minutes
-
 export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
   if (!hasApi()) return [];
-
-  // Return cached result if still fresh
-  if (upcomingFixturesCache && Date.now() < upcomingFixturesCache.expiresAt) {
-    return upcomingFixturesCache.data;
-  }
 
   const leagues = await getCoveredLeagues();
   if (!leagues.length) return [];
@@ -155,7 +113,6 @@ export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
     }
   }
 
-  upcomingFixturesCache = { data: allFixtures, expiresAt: Date.now() + UPCOMING_TTL_MS };
   return allFixtures;
 }
 
@@ -193,30 +150,17 @@ export async function getFixturesByDateGroupedByLeague(date?: string): Promise<M
 }
 
 
-// ─── In-memory cache for getLeagueStandings (prevents N+1 API calls) ────
-
-const standingsCache = new Map<string, { data: LeagueData; expiresAt: number }>();
-const STANDINGS_TTL_MS = 30 * 60 * 1000; // 30 minutes
-
 export async function getLeagueStandings(leagueSlug: string): Promise<LeagueData | null> {
   const leagueId = SLUG_TO_LEAGUE_ID[leagueSlug];
   if (!leagueId || !hasApi()) return null;
-
-  console.log(leagueId, "League ID");
-
-  // Return cached result if still fresh
-  const cached = standingsCache.get(leagueSlug);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.data;
-  }
-
-  console.log(cached, "Cached data");
 
   const leagues = await getCoveredLeagues();
   const league = leagues.find((l) => l.id === leagueId);
   if (!league) return null;
 
-  const season = league?.season || new Date().getFullYear();
+  const season = league?.season;
+  if (!season) return null;
+
   const name = LEAGUE_ID_TO_NAME[leagueId] || leagueSlug;
 
   const data = await apiFetch<{ response: { league: { standings: any[][] } }[] }>(
@@ -241,13 +185,7 @@ export async function getLeagueStandings(leagueSlug: string): Promise<LeagueData
   });
 
   const fixtures = await getUpcomingFixtures(7);
-  const result: LeagueData = { league: { name, slug: leagueSlug, logo: COMPETITION_LOGOS[name] || "" }, standings, upcomingFixtures: fixtures.filter((f) => f.competition === name).slice(0, 6) };
-
-  // Store in cache
-  standingsCache.set(leagueSlug, { data: result, expiresAt: Date.now() + STANDINGS_TTL_MS });
-
-  console.log(result, "League result");
-  return result;
+  return { league: { name, slug: leagueSlug, logo: COMPETITION_LOGOS[name] || "" }, standings, upcomingFixtures: fixtures.filter((f) => f.competition === name).slice(0, 6) };
 }
 
 export async function getMatchPreviewBySlug(slug: string): Promise<MatchPreview | null> {
@@ -300,7 +238,7 @@ export async function getMatchPreviewBySlug(slug: string): Promise<MatchPreview 
   // Get the season for this fixture's league
   const leagues = await getCoveredLeagues();
   const leagueObj = leagues.find((l) => l.name === fixture.competition);
-  const season = leagueObj?.season || new Date().getFullYear();
+  const season = leagueObj?.season;
 
   const [homeFormData, awayFormData, h2hData, predictionsData, injuriesData] = await Promise.all([
     apiFetch<any>(`/fixtures?team=${homeId}&status=ft&last=5&season=${season}`),
@@ -417,7 +355,7 @@ export async function getTopScorers(leagueSlug: string, limit: number = 10): Pro
   const league = leagues.find((l) => l.id === leagueId);
   if (!league) return [];
 
-  const season = league?.season || new Date().getFullYear();
+  const season = league?.season;
   const data = await apiFetch<any>(`/players/topscorers?league=${leagueId}&season=${season}`);
   if (!data?.response?.length) return [];
 
@@ -440,7 +378,7 @@ export async function getTopAssists(leagueSlug: string, limit: number = 10): Pro
   const league = leagues.find((l) => l.id === leagueId);
   if (!league) return [];
 
-  const season = league?.season || new Date().getFullYear();
+  const season = league?.season;
   const data = await apiFetch<any>(`/players/topassists?league=${leagueId}&season=${season}`);
   if (!data?.response?.length) return [];
 
@@ -461,7 +399,7 @@ export async function getPastResults(leagueSlug: string, limit: number = 10): Pr
 
   const leagues = await getCoveredLeagues();
   const league = leagues.find((l) => l.id === leagueId);
-  const season = league?.season || new Date().getFullYear();
+  const season = league?.season;
   if (!season) return [];
 
   const today = new Date().toISOString().split("T")[0];
@@ -490,7 +428,7 @@ export async function getTeamUpcomingFixtures(
   if (!hasApi()) return [];
 
   const leagues = await getCoveredLeagues();
-  const season = leagues[0]?.season || new Date().getFullYear();
+  const season = leagues[0]?.season;
 
   const data = await apiFetch<{ response: any[] }>(
     `/fixtures?team=${teamId}&season=${season}&status=ns&next=${count}`

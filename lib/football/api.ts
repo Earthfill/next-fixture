@@ -1,9 +1,8 @@
 // ---------------------------------------------------------------------------
 // API-Football client (RapidAPI) — lightweight, no file cache
 // ---------------------------------------------------------------------------
-// In-memory cache deduplicates within a single request cycle.
-// Persistent in-memory cache with 30-minute TTL reduces cross-request calls.
-// Page-level ISR (revalidate: 3600) handles cross-request caching.
+// In-memory dedup cache prevents duplicate concurrent calls within a single
+// request cycle. No cross-request caching — ISR handles that.
 // ---------------------------------------------------------------------------
 
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
@@ -18,23 +17,12 @@ export function hasApi(): boolean {
 
 const dedupCache = new Map<string, Promise<any>>();
 
-// ─── Persistent cache (cross-request, 30-minute TTL) ───────────────────
-
-const persistentCache = new Map<string, { data: any; expiresAt: number }>();
-const PERSISTENT_TTL_MS = 30 * 60 * 1000; // 30 minutes
-
 // ─── Public fetch function ───────────────────────────────────────────
 
 export async function apiFetch<T>(path: string): Promise<T | null> {
   if (!RAPIDAPI_KEY) return null;
 
-  // 1. Check persistent cache first (cross-request)
-  const cached = persistentCache.get(path);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.data as T;
-  }
-
-  // 2. Deduplicate concurrent calls within the same request
+  // Deduplicate concurrent calls within the same request
   if (dedupCache.has(path)) {
     return dedupCache.get(path)! as Promise<T | null>;
   }
@@ -42,13 +30,6 @@ export async function apiFetch<T>(path: string): Promise<T | null> {
   const promise = fetchWithRetry<T>(path);
   dedupCache.set(path, promise);
   promise.finally(() => dedupCache.delete(path));
-
-  // 3. Store in persistent cache on success
-  promise.then((result) => {
-    if (result) {
-      persistentCache.set(path, { data: result, expiresAt: Date.now() + PERSISTENT_TTL_MS });
-    }
-  });
 
   return promise;
 }
@@ -88,9 +69,8 @@ async function fetchWithRetry<T>(path: string): Promise<T | null> {
   return null;
 }
 
-// ─── Clear both caches (for admin panel) ──────────────────────────────
+// ─── Clear dedup cache (for admin panel) ──────────────────────────────
 
 export function clearApiCache(): void {
   dedupCache.clear();
-  persistentCache.clear();
 }

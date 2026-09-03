@@ -11,7 +11,7 @@ import FootballMatchCard from "@/components/football/FootballMatchCard";
 import NewsSection from "@/components/football/NewsSection";
 import { ChevronRight } from "lucide-react";
 
-export const revalidate = 1800;
+export const revalidate = 10800; // 3 hours
 
 export const metadata: Metadata = {
   title: "Football Predictions, Previews & Betting Tips Today",

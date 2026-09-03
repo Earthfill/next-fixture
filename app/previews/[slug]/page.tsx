@@ -18,7 +18,7 @@ import WinProbability from "@/components/football/WinProbability";
 import TeamNews from "@/components/football/TeamNews";
 import UpcomingFixtures from "@/components/football/UpcomingFixtures";
 
-export const revalidate = 3600;
+export const revalidate = 7200; // 2 hours
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://next-fixture.com";
 

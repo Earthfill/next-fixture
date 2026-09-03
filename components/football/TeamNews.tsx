@@ -10,7 +10,6 @@ interface PlayerNews {
 }
 
 export default function TeamNews({ homeTeam, awayTeam, homeNews, awayNews, lineups }: { homeTeam: string; awayTeam: string; homeNews: PlayerNews[]; awayNews: PlayerNews[]; lineups: any[] }) {
-  console.log(lineups.length, "Total lineups")
 
   return (
     <div>
