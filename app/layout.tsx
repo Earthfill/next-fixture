@@ -32,14 +32,14 @@ export const metadata: Metadata = {
     description:
       "In-depth football match previews with score predictions, betting tips, tactical analysis and odds. Expert coverage of Premier League, La Liga, Serie A & Bundesliga.",
     url: SITE_URL,
-    images: [{ url: "/logo.png", width: 1200, height: 630 }],
+    images: [{ url: `${SITE_URL}/opengraph-image.png`, width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Next Fixture — Football Predictions, Previews & Betting Tips",
     description:
       "In-depth football match previews with score predictions, betting tips, tactical analysis and odds.",
-    images: ["/logo.png"],
+    images: [`${SITE_URL}/twitter-image.png`],
   },
   icons: {
     icon: "/logo-small.svg",
