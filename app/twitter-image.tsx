@@ -18,9 +18,9 @@ export default async function Image() {
           alignItems: "center",
           justifyContent: "center",
           background: "#002b5c",
-          fontFamily: '"Inter", sans-serif',
           color: "white",
           padding: 60,
+          fontFamily: "sans-serif",
         }}
       >
         <div
@@ -41,10 +41,10 @@ export default async function Image() {
             Next Fixture
           </span>
         </div>
-        <div style={{ fontSize: 28, color: "#ffd230", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: 8 }}>
+        <div style={{ fontSize: 28, color: "#ffd230", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: 8 }}>
           Football Predictions &amp; Betting Tips
         </div>
-        <div style={{ fontSize: 18, color: "#ffffffcc", fontWeight: 400, textAlign: "center", maxWidth: 700, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 18, color: "#ffffffcc", textAlign: "center", maxWidth: 700, lineHeight: 1.5 }}>
           Premier League · La Liga · Serie A · Bundesliga
         </div>
       </div>

@@ -18,9 +18,9 @@ export default async function Image() {
           alignItems: "center",
           justifyContent: "center",
           background: "#002b5c",
-          fontFamily: '"Inter", sans-serif',
           color: "white",
           padding: 60,
+          fontFamily: "sans-serif",
         }}
       >
         {/* Logo area */}
@@ -61,7 +61,7 @@ export default async function Image() {
           style={{
             fontSize: 28,
             color: "#ffd230",
-            fontWeight: 600,
+            fontWeight: 700,
             textTransform: "uppercase",
             letterSpacing: "0.15em",
             marginBottom: 8,
@@ -75,7 +75,6 @@ export default async function Image() {
           style={{
             fontSize: 18,
             color: "#ffffffcc",
-            fontWeight: 400,
             textAlign: "center",
             maxWidth: 700,
             lineHeight: 1.5,
