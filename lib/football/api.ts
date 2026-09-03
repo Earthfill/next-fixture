@@ -58,7 +58,7 @@ async function fetchWithRetry<T>(path: string): Promise<T | null> {
     try {
       const res = await fetch(`${API_BASE}${path}`, {
         headers: { "x-apisports-key": RAPIDAPI_KEY! } as HeadersInit,
-        next: { revalidate: 3600 },
+        cache: "no-store",
       });
 
       if (res.status === 429) {

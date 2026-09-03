@@ -66,7 +66,10 @@ export interface LeagueData {
 }
 
 export interface FixtureGroup {
-  competition: string; competitionLogo: string; competitionSlug: string; fixtures: Fixture[];
+  competition: string; 
+  competitionLogo: string; 
+  competitionSlug: string; 
+  fixtures: Fixture[];
 }
 
 export interface MatchdayGroup {

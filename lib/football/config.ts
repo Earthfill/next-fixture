@@ -90,8 +90,30 @@ for (const l of LEAGUE_DATA) {
 // Country display order (for the drawer)
 export const COUNTRY_ORDER = ["England", "Scotland", "Spain", "Germany", "Italy", "France", "Netherlands", "Portugal"];
 
-export function generateSlug(home: string, away: string): string {
-  return `${home.toLowerCase().replace(/\s+/g, "-")}-vs-${away.toLowerCase().replace(/\s+/g, "-")}`;
+export function generateSlug(id: string, home: string, away: string): string {
+  return `${id}--${home.toLowerCase().replace(/\s+/g, "-")}-vs-${away.toLowerCase().replace(/\s+/g, "-")}`;
+}
+
+export function parseSlug(slug: string): { fixtureId: string | null; homeSlug: string; awaySlug: string } {
+  // Format: "{fixtureId}--{home}-vs-{away}" or old "{home}-vs-{away}"
+  const doubleDashIdx = slug.indexOf("--");
+  if (doubleDashIdx > -1) {
+    const fixtureId = slug.substring(0, doubleDashIdx);
+    const rest = slug.substring(doubleDashIdx + 2);
+    const parts = rest.split("-vs-");
+    return {
+      fixtureId,
+      homeSlug: parts[0] || "",
+      awaySlug: parts[1] || "",
+    };
+  }
+  // Old format: "{home}-vs-{away}" — no fixture ID
+  const parts = slug.split("-vs-");
+  return {
+    fixtureId: null,
+    homeSlug: parts[0] || "",
+    awaySlug: parts[1] || "",
+  };
 }
 
 export function normalizeName(name: string): string {

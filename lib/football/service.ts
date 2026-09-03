@@ -11,7 +11,7 @@ import { loadTeams, loadH2H } from "@/lib/football/local";
 import { buildPrediction, generateAnalysis } from "@/lib/football/analysis";
 import {
   LEAGUE_IDS, LEAGUE_ID_TO_NAME, COMPETITION_LOGOS, COMPETITION_SLUGS,
-  SLUG_TO_LEAGUE_ID, LEAGUE_ORDER, generateSlug, normalizeName,
+  SLUG_TO_LEAGUE_ID, LEAGUE_ORDER, generateSlug, parseSlug, normalizeName,
 } from "@/lib/football/config";
 
 // ─── Covered leagues cache (fetched once, cached aggressively) ────────
@@ -79,6 +79,21 @@ async function getCoveredLeagues(): Promise<CoveredLeague[]> {
       };
     });
 
+  // If the API returned data but none of our leagues were found (e.g. wrong season),
+  // fall back to hardcoded data
+  if (!coveredLeaguesCache.length && data?.response?.length) {
+    console.warn("No tracked leagues found in API response, falling back to hardcoded data");
+    const fallbackSeason = new Date().getFullYear();
+    coveredLeaguesCache = Object.entries(LEAGUE_IDS).map(([name, id]) => ({
+      id,
+      name,
+      season: fallbackSeason,
+      hasFixtures: true, hasStandings: true,
+      hasTopScorers: true, hasTopAssists: true,
+      hasPredictions: true,
+    }));
+  }
+
   return coveredLeaguesCache;
 }
 
@@ -93,7 +108,7 @@ function apiFixtureToFixture(m: any): Fixture | null {
   const status = f?.status?.short;
   return {
     id: String(f.id),
-    slug: generateSlug(t.home.name, t.away.name),
+    slug: generateSlug(String(f.id), t.home.name, t.away.name),
     homeTeam: { id: String(t.home.id), name: t.home.name, shortName: t.home.name.substring(0, 3).toUpperCase(), logo: t.home.logo || "" },
     awayTeam: { id: String(t.away.id), name: t.away.name, shortName: t.away.name.substring(0, 3).toUpperCase(), logo: t.away.logo || "" },
     competition: LEAGUE_ID_TO_NAME[l?.id] || l?.name || "",
@@ -129,10 +144,9 @@ export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
   endDate.setDate(endDate.getDate() + (value ?? 3));
   const to = endDate.toISOString().split("T")[0];
 
-  // Fetch fixtures per league with from+to range (7 days)
+  // Fetch fixtures per league with from+to range
   const allFixtures: Fixture[] = [];
   for (const league of leagues) {
-    if (!league.hasFixtures) continue;
     const data = await apiFetch<{ response: any[] }>(
       `/fixtures?from=${today}&to=${to}&league=${league.id}&season=${league.season}`
     );
@@ -179,18 +193,34 @@ export async function getFixturesByDateGroupedByLeague(date?: string): Promise<M
 }
 
 
+// ─── In-memory cache for getLeagueStandings (prevents N+1 API calls) ────
+
+const standingsCache = new Map<string, { data: LeagueData; expiresAt: number }>();
+const STANDINGS_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
 export async function getLeagueStandings(leagueSlug: string): Promise<LeagueData | null> {
   const leagueId = SLUG_TO_LEAGUE_ID[leagueSlug];
   if (!leagueId || !hasApi()) return null;
 
+  console.log(leagueId, "League ID");
+
+  // Return cached result if still fresh
+  const cached = standingsCache.get(leagueSlug);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
+  }
+
+  console.log(cached, "Cached data");
+
   const leagues = await getCoveredLeagues();
   const league = leagues.find((l) => l.id === leagueId);
-  if (!league || !league.hasStandings) return null;
+  if (!league) return null;
 
+  const season = league?.season || new Date().getFullYear();
   const name = LEAGUE_ID_TO_NAME[leagueId] || leagueSlug;
 
   const data = await apiFetch<{ response: { league: { standings: any[][] } }[] }>(
-    `/standings?league=${leagueId}&season=${league.season}`
+    `/standings?league=${leagueId}&season=${season}`
   );
   if (!data?.response?.[0]?.league?.standings?.[0]) return null;
 
@@ -211,19 +241,61 @@ export async function getLeagueStandings(leagueSlug: string): Promise<LeagueData
   });
 
   const fixtures = await getUpcomingFixtures(7);
-  return { league: { name, slug: leagueSlug, logo: COMPETITION_LOGOS[name] || "" }, standings, upcomingFixtures: fixtures.filter((f) => f.competition === name).slice(0, 6) };
+  const result: LeagueData = { league: { name, slug: leagueSlug, logo: COMPETITION_LOGOS[name] || "" }, standings, upcomingFixtures: fixtures.filter((f) => f.competition === name).slice(0, 6) };
+
+  // Store in cache
+  standingsCache.set(leagueSlug, { data: result, expiresAt: Date.now() + STANDINGS_TTL_MS });
+
+  console.log(result, "League result");
+  return result;
 }
 
 export async function getMatchPreviewBySlug(slug: string): Promise<MatchPreview | null> {
   if (!hasApi()) return null;
 
-  const fixtures = await getUpcomingFixtures();
-  const fixture = fixtures.find((f) => f.slug === slug);
-  if (!fixture) return null;
+  // Try to extract fixture ID from the slug (format: "{fixtureId}--{home}-vs-{away}")
+  const { fixtureId: extractedId } = parseSlug(slug);
 
-  const fixtureId = parseInt(fixture.id);
-  const homeId = parseInt(fixture.homeTeam.id);
-  const awayId = parseInt(fixture.awayTeam.id);
+  let fixture: Fixture | undefined;
+  let fixtureId = 0;
+  let homeId = 0;
+  let awayId = 0;
+
+  if (extractedId) {
+    // Direct API fetch by fixture ID — most reliable path
+    const fixtureData = await apiFetch<any>(`/fixtures?id=${extractedId}`);
+    const m = fixtureData?.response?.[0];
+    if (m?.teams?.home?.name && m?.teams?.away?.name) {
+      const f = m.fixture;
+      const t = m.teams;
+      const l = m.league;
+      fixture = {
+        id: String(f.id),
+        slug,
+        homeTeam: { id: String(t.home.id), name: t.home.name, shortName: t.home.name.substring(0, 3).toUpperCase(), logo: t.home.logo || "" },
+        awayTeam: { id: String(t.away.id), name: t.away.name, shortName: t.away.name.substring(0, 3).toUpperCase(), logo: t.away.logo || "" },
+        competition: l?.name || "",
+        competitionLogo: COMPETITION_LOGOS[l?.name] || l?.logo || "",
+        venue: { name: f?.venue?.name || "", city: f?.venue?.city || "" },
+        date: f?.date || "",
+        status: f?.status?.short === "FT" || f?.status?.short === "AET" || f?.status?.short === "PEN" ? "finished" : f?.status?.short === "LIVE" || f?.status?.short === "1H" || f?.status?.short === "2H" || f?.status?.short === "HT" || f?.status?.short === "ET" ? "live" : "upcoming",
+        score: f?.status?.short === "FT" || f?.status?.short === "AET" || f?.status?.short === "PEN" || f?.status?.short === "LIVE" || f?.status?.short?.includes("H") ? { home: m.goals?.home ?? 0, away: m.goals?.away ?? 0 } : undefined,
+      };
+      fixtureId = parseInt(f.id);
+      homeId = parseInt(t.home.id);
+      awayId = parseInt(t.away.id);
+    }
+  }
+
+  // Fallback: search in the upcoming fixtures cache (old format slugs)
+  if (!fixture) {
+    const fixtures = await getUpcomingFixtures();
+    fixture = fixtures.find((f) => f.slug === slug);
+    if (!fixture) return null;
+    fixtureId = parseInt(fixture.id);
+    homeId = parseInt(fixture.homeTeam.id);
+    awayId = parseInt(fixture.awayTeam.id);
+  }
 
   // Get the season for this fixture's league
   const leagues = await getCoveredLeagues();
@@ -343,9 +415,10 @@ export async function getTopScorers(leagueSlug: string, limit: number = 10): Pro
 
   const leagues = await getCoveredLeagues();
   const league = leagues.find((l) => l.id === leagueId);
-  if (!league || !league.hasTopScorers) return [];
+  if (!league) return [];
 
-  const data = await apiFetch<any>(`/players/topscorers?league=${leagueId}&season=${league.season}`);
+  const season = league?.season || new Date().getFullYear();
+  const data = await apiFetch<any>(`/players/topscorers?league=${leagueId}&season=${season}`);
   if (!data?.response?.length) return [];
 
   return data.response.slice(0, limit).map((s: any, i: number) => ({
@@ -365,9 +438,10 @@ export async function getTopAssists(leagueSlug: string, limit: number = 10): Pro
 
   const leagues = await getCoveredLeagues();
   const league = leagues.find((l) => l.id === leagueId);
-  if (!league || !league.hasTopAssists) return [];
+  if (!league) return [];
 
-  const data = await apiFetch<any>(`/players/topassists?league=${leagueId}&season=${league.season}`);
+  const season = league?.season || new Date().getFullYear();
+  const data = await apiFetch<any>(`/players/topassists?league=${leagueId}&season=${season}`);
   if (!data?.response?.length) return [];
 
   return data.response.slice(0, limit).map((s: any, i: number) => ({
@@ -387,7 +461,8 @@ export async function getPastResults(leagueSlug: string, limit: number = 10): Pr
 
   const leagues = await getCoveredLeagues();
   const league = leagues.find((l) => l.id === leagueId);
-  if (!league?.season) return [];
+  const season = league?.season || new Date().getFullYear();
+  if (!season) return [];
 
   const today = new Date().toISOString().split("T")[0];
   const pastDate = new Date();
@@ -395,7 +470,7 @@ export async function getPastResults(leagueSlug: string, limit: number = 10): Pr
   const from = pastDate.toISOString().split("T")[0];
 
   const data = await apiFetch<{ response: any[] }>(
-    `/fixtures?league=${leagueId}&season=${league.season}&from=${from}&to=${today}&status=ft`
+    `/fixtures?league=${leagueId}&season=${season}&from=${from}&to=${today}&status=ft`
   );
   if (!data?.response?.length) return [];
 

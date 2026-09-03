@@ -73,7 +73,7 @@ export default function Header() {
                         <Link 
                           key={league.slug} 
                           href={`/leagues/${league.slug}`} 
-                          prefetch={false} 
+                          // prefetch={false} 
                           onClick={() => setDrawerOpen(false)}
                           className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-700 hover:text-[#002b5c] hover:bg-zinc-50 transition-colors group"
                         >

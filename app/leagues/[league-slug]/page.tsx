@@ -43,9 +43,11 @@ export async function generateMetadata({ params }: { params: Promise<{ "league-s
 export default async function LeaguePage({ params }: { params: Promise<{ "league-slug": string }> }) {
   const s = (await params)["league-slug"];
   const data = await getLeagueStandings(s);
-  if (!data) notFound();
 
-  const { league, standings, upcomingFixtures } = data;
+  console.log(data, "Data")
+  // if (!data) notFound();
+
+  const { league, standings, upcomingFixtures } = data!;
   const scorers = await getTopScorers(s, 10);
   const assists = await getTopAssists(s, 10);
   const { articles: news } = await getFootballNews();

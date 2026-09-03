@@ -116,6 +116,7 @@ export default async function HomePage() {
                       </div>
                       <Link
                         href={`/leagues/${league.competitionSlug}`}
+                        prefetch={false}
                         className="text-[11px] font-medium flex items-center gap-0.5"
                         style={{ color: '#002b5c' }}
                       >
