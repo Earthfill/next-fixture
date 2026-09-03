@@ -22,7 +22,7 @@ export default function VideoHighlights({ videos }: VideoHighlightsProps) {
       <h2 className="sm-section-heading mb-3">Match Highlights</h2>
 
       {/* Active video (larger embed) */}
-      <div className="aspect-video w-full overflow-hidden rounded-sm bg-black mb-3">
+      <div className="aspect-video w-full overflow-hidden rounded-sm bg-black mb-2">
         <iframe
           key={activeVideo.videoId}
           src={`https://www.youtube.com/embed/${activeVideo.videoId}`}
