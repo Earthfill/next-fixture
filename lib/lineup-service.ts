@@ -100,9 +100,9 @@ export async function getPredictedLineup(
   // 3. Compute new prediction
   const result = await computePrediction(teamId, season);
 
-  // 4. Cache and return
+  // 4. Cache and return (reuse coachInfo from step 1 - avoid a second call)
   if (result) {
-    const coach = await getTeamCoach(teamId);
+    const coach = coachInfo;
     setCache(teamId, result, coach || undefined);
     return { ...result, source: "predicted", coach: coach || undefined };
   }
@@ -129,7 +129,7 @@ async function computePrediction(
 
   // Fetch confirmed lineups for those fixtures
   const lineupPromises = recentFixtures
-    .slice(0, 6)
+    .slice(0, 4)
     .map((f) => getFixtureLineup(f.id, teamId));
   const lineupResults = await Promise.all(lineupPromises);
 

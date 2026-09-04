@@ -5,9 +5,10 @@
 // Dynamic Time-To-Live (seconds)
 export const TTL = {
   fixtures: 24 * 60 * 60, // 24h - schedules / leagues
-  standings: 12 * 60 * 60, // 12h - league tables
+  standings: 24 * 60 * 60, // 24h - league tables
   live: 30, // 30s - active live matches
-  preview: 600, // 10m - match previews (~8-10 upstream calls each!)
+  preview: 24 * 60 * 60, // 24h - match previews
+  lineups: 3 * 60 * 60, // 3h - lineups (confirmed/predicted)
 } as const;
 
 // Granular cache keys

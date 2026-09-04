@@ -14,9 +14,11 @@ const FETCH_TIMEOUT_MS = 10_000;
 const MAX_ATTEMPTS = 3;
 
 // Global outbound rate limit (per-minute) - token bucket. Prevents bursts from
-// tripping API-Football's per-minute limit (free tier is ~10 requests/minute).
-// Raise via API_FOOTBALL_RATE_LIMIT_RPM if your plan allows more.
-const RATE_LIMIT_RPM = Math.max(1, parseInt(process.env.API_FOOTBALL_RATE_LIMIT_RPM || "", 10) || 10);
+// tripping API-Football's per-minute limit. Default is a usable 30 req/min;
+// set API_FOOTBALL_RATE_LIMIT_RPM to your plan's actual limit, or 0 to disable
+// throttling entirely (the retry logic will then handle rate-limit errors).
+const RATE_LIMIT_RPM_RAW = parseInt(process.env.API_FOOTBALL_RATE_LIMIT_RPM || "", 10);
+const RATE_LIMIT_RPM = Number.isNaN(RATE_LIMIT_RPM_RAW) ? 30 : Math.max(0, RATE_LIMIT_RPM_RAW);
 
 // Backoff (ms) before retrying when a rate-limit error is returned. The retry
 // delay scales with the attempt number (see fetchWithRetry).
@@ -107,6 +109,7 @@ function refillRateTokens(): void {
 }
 
 async function acquireRateSlot(): Promise<void> {
+  if (RATE_LIMIT_RPM <= 0) return; // throttle disabled
   while (true) {
     refillRateTokens();
     if (rateTokens >= 1) {

@@ -139,7 +139,7 @@ export async function getFixtureLineups(
 ): Promise<LineupEntry[]> {
   const { data } = await cacheAside<LineupEntry[]>(
     `lineups:${fixtureId}`,
-    TTL.preview,
+    TTL.lineups,
     () => getFixtureLineupsRaw(fixtureId, context).then((r) => r ?? [])
   );
 	

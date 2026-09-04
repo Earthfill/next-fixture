@@ -184,8 +184,19 @@ export async function getLeagueStandings(leagueSlug: string): Promise<LeagueData
     };
   });
 
-  const fixtures = await getUpcomingFixtures(7);
-  return { league: { name, slug: leagueSlug, logo: COMPETITION_LOGOS[name] || "" }, standings, upcomingFixtures: fixtures.filter((f) => f.competition === name).slice(0, 6) };
+  // Fetch upcoming fixtures for THIS league only (1 API call) instead of
+  // getUpcomingFixtures(7), which loops every league (~15 calls).
+  const today = new Date().toISOString().split("T")[0];
+  const end = new Date();
+  end.setDate(end.getDate() + 7);
+  const to = end.toISOString().split("T")[0];
+  const upcoming = await fetchFixturesForRange(today, to, leagueSlug);
+
+  return {
+    league: { name, slug: leagueSlug, logo: COMPETITION_LOGOS[name] || "" },
+    standings,
+    upcomingFixtures: upcoming.slice(0, 6),
+  };
 }
 
 export async function getMatchPreviewBySlug(slug: string): Promise<MatchPreview | null> {
