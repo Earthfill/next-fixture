@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { Metadata } from "next";
-import { getAvailableMatchdays, getFixturesByDateGroupedByLeague } from "@/lib/sports-api";
+import { getAvailableMatchdays, getFixturesByDateGroupedByLeague } from "@/lib/cache/pages";
 import { getFootballNews } from "@/lib/news";
 import NewsSection from "@/components/football/NewsSection";
 import MatchdayList from "@/components/football/MatchdayList";

@@ -5,7 +5,8 @@
 import React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { getUpcomingFixtures, getAvailableMatchdays } from "@/lib/sports-api";
+import { getUpcomingFixtures, getAvailableMatchdays } from "@/lib/cache/pages";
+import JobRunner from "@/components/admin/JobRunner";
 import { Trophy, Calendar, BarChart3, RefreshCw, ExternalLink, TrendingUp, DollarSign, Eye } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminPage() {
   const fixtures = await getUpcomingFixtures();
   const matchdays = await getAvailableMatchdays();
+  const adminToken = process.env.ADMIN_SECRET || "kingsley";
 
   const totalFixtures = fixtures.length;
   const totalMatchdays = matchdays.length;
@@ -75,18 +77,9 @@ export default async function AdminPage() {
             Data Management
           </h2>
           <p className="text-xs text-zinc-500 mb-3">
-            Run the scraper to fetch latest data from API-Football. Data is cached for 24 hours to minimize API calls.
+            Manually run background jobs. Fixtures/standings data is cached (24h/12h) so re-running refreshes it on demand.
           </p>
-          <form action="/api/admin/seed" method="POST" className="flex gap-2">
-            <input type="hidden" name="token" value="kingsley" />
-            <button
-              type="submit"
-              className="text-xs font-semibold text-white px-4 py-2"
-              style={{ background: '#002b5c' }}
-            >
-              Run Scraper Now
-            </button>
-          </form>
+          <JobRunner token={adminToken} />
         </div>
 
         <div className="border border-zinc-200 bg-white p-5">

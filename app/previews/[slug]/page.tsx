@@ -3,13 +3,14 @@
 // ---------------------------------------------------------------------------
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getMatchPreviewBySlug } from "@/lib/sports-api";
+import { getMatchPreviewBySlug } from "@/lib/cache/pages";
 import MatchHeader from "@/components/football/MatchHeader";
 import TacticalAnalysis from "@/components/football/TacticalAnalysis";
 import HeadToHeadTable from "@/components/football/HeadToHeadTable";
 import FormGuide from "@/components/football/FormGuide";
 import OddsWidget from "@/components/football/OddsWidget";
-import { getFixtureLineups, getTeamUpcomingFixtures, getLeagueStandings, getFixtureOdds } from "@/lib/sports-api";
+import { getFixtureLineups, getTeamUpcomingFixtures, getLeagueStandings } from "@/lib/cache/pages";
+import { getFixtureOdds } from "@/lib/sports-api";
 import { computePrediction } from "@/lib/football/win-probability";
 import { generateNlgAnalysis } from "@/lib/football/nlg-analysis";
 import AdSlot from "@/components/common/AdSlot";

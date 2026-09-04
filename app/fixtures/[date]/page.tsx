@@ -7,7 +7,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getFixturesByDateGroupedByLeague } from "@/lib/sports-api";
+import { getFixturesByDateGroupedByLeague } from "@/lib/cache/pages";
 import FootballMatchCard from "@/components/football/FootballMatchCard";
 import { ChevronRight, Calendar } from "lucide-react";
 

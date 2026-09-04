@@ -6,7 +6,7 @@
 // pages, so Google will discover them through crawl links automatically.
 // ---------------------------------------------------------------------------
 import type { MetadataRoute } from "next";
-import { getAvailableMatchdays } from "@/lib/sports-api";
+import { getAvailableMatchdays } from "@/lib/cache/pages";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://next-fixture.com";
 

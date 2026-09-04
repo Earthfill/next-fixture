@@ -439,3 +439,46 @@ export async function getTeamUpcomingFixtures(
     .map(apiFixtureToFixture)
     .filter((f: Fixture | null): f is Fixture => f !== null);
 }
+
+// ─── Raw fixture range fetcher (used by cache layer + cron jobs) ──────
+
+export async function fetchFixturesForRange(
+  from: string,
+  to: string,
+  leagueSlug?: string
+): Promise<Fixture[]> {
+  if (!hasApi()) return [];
+
+  const leagues = await getCoveredLeagues();
+  let targets = leagues;
+  if (leagueSlug) {
+    targets = leagues.filter((l) => COMPETITION_SLUGS[LEAGUE_ID_TO_NAME[l.id] || ""] === leagueSlug);
+  }
+
+  const allFixtures: Fixture[] = [];
+  for (const league of targets) {
+    const data = await apiFetch<{ response: any[] }>(
+      `/fixtures?from=${from}&to=${to}&league=${league.id}&season=${league.season}`
+    );
+    if (data?.response?.length) {
+      allFixtures.push(
+        ...data.response.map(apiFixtureToFixture).filter((f: Fixture | null): f is Fixture => f !== null)
+      );
+    }
+  }
+
+  return allFixtures;
+}
+
+// ─── Live matches fetcher (used by cache layer + live poll job) ────────
+
+export async function fetchLiveMatches(): Promise<Fixture[]> {
+  if (!hasApi()) return [];
+
+  const data = await apiFetch<{ response: any[] }>("/fixtures?live=all");
+  if (!data?.response?.length) return [];
+
+  return data.response
+    .map(apiFixtureToFixture)
+    .filter((f: Fixture | null): f is Fixture => f !== null);
+}

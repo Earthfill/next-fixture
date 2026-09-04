@@ -6,12 +6,22 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "cron": "tsx scripts/cron-worker.ts",
+    "job:fixtures": "tsx scripts/run-job.ts fixtures",
+    "job:live": "tsx scripts/run-job.ts live",
+    "check:infra": "tsx scripts/check-infra.ts"
   },
   "dependencies": {
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.23.1",
     "@vercel/analytics": "^2.0.1",
+    "ioredis": "^6.0.0",
     "lucide-react": "^1.38.0",
     "next": "16.3.3",
+    "node-cron": "^4.6.0",
+    "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -23,6 +33,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5"
   }
 }

@@ -4,7 +4,7 @@
 import Image from "next/image";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getLeagueStandings, getTopScorers, getTopAssists, getPastResults } from "@/lib/sports-api";
+import { getLeagueStandings, getTopScorers, getTopAssists, getPastResults } from "@/lib/cache/pages";
 import { getFootballNews } from "@/lib/news";
 import { Goal } from "lucide-react";
 import NewsSection from "@/components/football/NewsSection";
