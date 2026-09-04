@@ -35,7 +35,7 @@ export default function FootballMatchCard({ fixture }: FootballMatchCardProps) {
       </div>
 
       {/* Home team */}
-      <div className="flex items-center gap-2 w-[40%] justify-end">
+      <div className="flex items-center gap-2 w-[40%] justify-end min-w-0">
         <span className="text-sm font-medium text-zinc-800 group-hover:text-blue-700 transition-colors truncate">
           {fixture.homeTeam.name}
         </span>
@@ -50,7 +50,7 @@ export default function FootballMatchCard({ fixture }: FootballMatchCardProps) {
       </div>
 
       {/* Away team */}
-      <div className="flex items-center gap-2 w-[40%]">
+      <div className="flex items-center gap-2 w-[40%] min-w-0">
         <Image src={fixture.awayTeam.logo} alt={`${fixture.awayTeam.name} logo`} width={22} height={22} className="sm-crest shrink-0" />
         <span className="text-sm font-medium text-zinc-800 group-hover:text-blue-700 transition-colors truncate">
           {fixture.awayTeam.name}

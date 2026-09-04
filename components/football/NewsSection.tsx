@@ -114,7 +114,7 @@ export default function NewsSection({ news, layout = "fullwidth", title = "Lates
       )}
 
       {/* News list */}
-      <div className="border border-zinc-200 bg-white grid grid-cols-2">
+      <div className="border border-zinc-200 bg-white grid md:grid-cols-2">
         {displayItems.map((item, i) => {
           if (layout === "fullwidth" && i === 0) return null;
           return (

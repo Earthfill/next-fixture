@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import Header from "@/components/common/Header";
 import Footer from "@/components/common/Footer";
+import CookieConsentBanner from "@/components/common/CookieConsentBanner";
 // import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({
@@ -72,6 +73,7 @@ export default function RootLayout({
         <Header />
         <main className="flex-1 w-full">{children}</main>
         <Footer />
+        <CookieConsentBanner />
 
         {/* Google AdSense script slot */}
         <Script

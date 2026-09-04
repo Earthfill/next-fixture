@@ -30,7 +30,7 @@ export default function MatchdayList({ matchdays }: Props) {
   return (
     <div className="space-y-10">
       {matchdays.map((matchday, idx) => {
-        const isOpen = openDays[matchday.slug] === true; // default closed
+        const isOpen = openDays[matchday.slug] !== false; // default open (closes only on user action)
 
         return (
           <section key={matchday.date}>
@@ -43,21 +43,24 @@ export default function MatchdayList({ matchdays }: Props) {
                 <span className="inline-block w-2 h-2 rounded-full bg-[#002b5c]" />
                 {formatDateLabel(matchday.date)}
                 <span className="text-xs font-normal text-zinc-400">
-                  ({matchday.fixtureCount} match{matchday.fixtureCount !== 1 ? "es" : ""} covered)
+                  <span>
+                    ({matchday.fixtureCount})
+                  </span>
+                  <span className="ml-0.5 hidden md:inline-block">
+                    match{matchday.fixtureCount !== 1 ? "es" : ""}
+                  </span>
                 </span>
                 <ChevronDown
-                  className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${
-                    isOpen ? "rotate-0" : "-rotate-90"
-                  } animate-bounce`}
+                  className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${isOpen ? "rotate-0" : "-rotate-90"
+                    } animate-bounce`}
                 />
               </h2>
             </button>
 
             {/* League sections — collapsible */}
             <div
-              className={`overflow-hidden transition-all duration-300 ${
-                isOpen ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
-              }`}
+              className={`overflow-hidden transition-all duration-300 ${isOpen ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
+                }`}
             >
               <div className="space-y-6">
                 {matchday.leagues.map((league) => (
