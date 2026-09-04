@@ -6,9 +6,9 @@
 export const TTL = {
   fixtures: 24 * 60 * 60, // 24h - schedules / leagues
   standings: 24 * 60 * 60, // 24h - league tables
-  live: 30, // 30s - active live matches
+  live: 60 * 60, // 1h - active live matches
   preview: 24 * 60 * 60, // 24h - match previews
-  lineups: 3 * 60 * 60, // 3h - lineups (confirmed/predicted)
+  lineups: 4 * 60 * 60, // 6h - lineups (confirmed/predicted)
 } as const;
 
 // Granular cache keys
