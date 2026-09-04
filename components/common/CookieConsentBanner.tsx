@@ -6,21 +6,28 @@
 // ---------------------------------------------------------------------------
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Cookie } from "lucide-react";
 
 const STORAGE_KEY = "cookie-consent";
 
 export default function CookieConsentBanner() {
+  const pathname = usePathname();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    // Hide on the privacy page (where the policy is explained), but show
+    // everywhere else until the user explicitly accepts or declines.
+    const isPrivacyPage = pathname === "/privacy";
+    let hasConsent = false;
     try {
-      if (!localStorage.getItem(STORAGE_KEY)) setVisible(true);
+      hasConsent = Boolean(localStorage.getItem(STORAGE_KEY));
     } catch {
-      // localStorage unavailable (privacy mode) - leave hidden
+      // localStorage unavailable (privacy mode) - treat as no consent
     }
-  }, []);
+    setVisible(!hasConsent && !isPrivacyPage);
+  }, [pathname]);
 
   function setChoice(value: "accepted" | "declined"): void {
     try {
