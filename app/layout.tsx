@@ -43,8 +43,9 @@ export const metadata: Metadata = {
     images: [`${SITE_URL}/og-default.png`],
   },
   icons: {
-    icon: "/logo-small.svg",
-    shortcut: "/logo-small.svg",
+    icon: "/icon.png",
+    shortcut: "/favicon.ico",
+    apple: "/apple-icon.png",
   },
   verification: {
     google: "YOUR_GOOGLE_VERIFICATION_CODE", // Replace with your actual Google Search Console verification code
