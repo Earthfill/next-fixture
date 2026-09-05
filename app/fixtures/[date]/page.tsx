@@ -13,7 +13,7 @@ import { ChevronRight, Calendar } from "lucide-react";
 
 export const revalidate = 10800; // 3 hours
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://next-fixture.com";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL as string;
 
 export async function generateMetadata({
   params,

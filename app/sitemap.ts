@@ -8,7 +8,7 @@
 import type { MetadataRoute } from "next";
 import { getAvailableMatchdays } from "@/lib/cache/pages";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://next-fixture.com";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL as string;
 
 // League slugs covered by the platform
 const LEAGUE_SLUGS = [

@@ -12,7 +12,7 @@ const inter = Inter({
   display: "swap",
 });
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://next-fixture.com";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL as string;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

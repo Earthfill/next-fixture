@@ -79,7 +79,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ "league
             "@type": "SportsTeam",
             name: league.name,
             description: `${league.name} standings, fixtures and match predictions.`,
-            url: `${process.env.NEXT_PUBLIC_SITE_URL || "https://next-fixture.com"}/leagues/${s}`,
+            url: `${process.env.NEXT_PUBLIC_SITE_URL as string}/leagues/${s}`,
           }),
         }}
       />

@@ -8,7 +8,7 @@
 import { isCircuitOpen, recordFailure, recordSuccess } from "@/lib/football/circuit-breaker";
 
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
-const RAPIDAPI_HOST = process.env.API_FOOTBALL_HOST || "v3.football.api-sports.io";
+const RAPIDAPI_HOST = process.env.API_FOOTBALL_HOST;
 const API_BASE = "https://" + RAPIDAPI_HOST;
 
 // Per-attempt timeout  never let a hanging DNS/TCP hold the request forever.
@@ -19,12 +19,12 @@ const MAX_ATTEMPTS = 3;
 // tripping API-Football's per-minute limit. Default is a usable 30 req/min;
 // set API_FOOTBALL_RATE_LIMIT_RPM to your plan's actual limit, or 0 to disable
 // throttling entirely (the retry logic will then handle rate-limit errors).
-const RATE_LIMIT_RPM_RAW = parseInt(process.env.API_FOOTBALL_RATE_LIMIT_RPM || "", 10);
+const RATE_LIMIT_RPM_RAW = parseInt(process.env.API_FOOTBALL_RATE_LIMIT_RPM as string, 10);
 const RATE_LIMIT_RPM = Number.isNaN(RATE_LIMIT_RPM_RAW) ? 30 : Math.max(0, RATE_LIMIT_RPM_RAW);
 
 // Backoff (ms) before retrying when a rate-limit error is returned. The retry
 // delay scales with the attempt number (see fetchWithRetry).
-const RATE_LIMIT_BACKOFF_MS = parseInt(process.env.API_FOOTBALL_RATE_LIMIT_BACKOFF_MS || "", 10) || 4000;
+const RATE_LIMIT_BACKOFF_MS = parseInt(process.env.API_FOOTBALL_RATE_LIMIT_BACKOFF_MS as string, 10) || 4000;
 
 // DNS / network error codes that are usually TRANSIENT  worth retrying.
 const TRANSIENT_CODES = new Set([

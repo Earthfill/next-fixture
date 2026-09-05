@@ -34,9 +34,9 @@ function parseHostPort(url: string, fallbackPort: number): { host: string; port:
   return { host: match[1], port: parseInt(match[2], 10) || fallbackPort };
 }
 
-const API_HOST = process.env.API_FOOTBALL_HOST || "v3.football.api-sports.io";
-const REDIS_URL = process.env.REDIS_URL || "";
-const PG_URL = process.env.DATABASE_URL || "";
+const API_HOST = process.env.API_FOOTBALL_HOST as string;
+const REDIS_URL = process.env.REDIS_URL as string;
+const PG_URL = process.env.DATABASE_URL as string;
 
 const targets: Target[] = [
   { name: "API-Football", url: `https://${API_HOST}`, host: API_HOST, port: 443 },
@@ -116,7 +116,7 @@ async function main(): Promise<void> {
     }
     if (t.name === "API-Football") {
       try {
-        const res = await fetch(`https://${API_HOST}/status`, { headers: { "x-apisports-key": process.env.RAPIDAPI_KEY || "" } as HeadersInit, signal: AbortSignal.timeout(8000) });
+        const res = await fetch(`https://${API_HOST}/status`, { headers: { "x-apisports-key": process.env.RAPIDAPI_KEY as string } as HeadersInit, signal: AbortSignal.timeout(8000) });
         console.log(`  HTTP:   GET /status -> ${res.status}`);
       } catch (err) {
         console.log(`  HTTP:   GET /status FAIL -> ${(err as Error).message}`);

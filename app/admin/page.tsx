@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import React from "react";
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { getUpcomingFixtures, getAvailableMatchdays } from "@/lib/cache/pages";
@@ -11,10 +12,18 @@ import { Trophy, Calendar, BarChart3, RefreshCw, ExternalLink, TrendingUp, Dolla
 
 export const dynamic = "force-dynamic";
 
+export const metadata: Metadata = {
+  title: "Admin Dashboard",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
+
 export default async function AdminPage() {
   const fixtures = await getUpcomingFixtures();
   const matchdays = await getAvailableMatchdays();
-  const adminToken = process.env.ADMIN_SECRET || "kingsley";
+  const adminToken = process.env.ADMIN_SECRET;
 
   const totalFixtures = fixtures.length;
   const totalMatchdays = matchdays.length;
@@ -79,7 +88,7 @@ export default async function AdminPage() {
           <p className="text-xs text-zinc-500 mb-3">
             Manually run background jobs. Fixtures/standings data is cached (24h/12h) so re-running refreshes it on demand.
           </p>
-          <JobRunner token={adminToken} />
+          <JobRunner token={adminToken as string} />
         </div>
 
         <div className="border border-zinc-200 bg-white p-5">

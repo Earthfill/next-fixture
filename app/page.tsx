@@ -61,14 +61,14 @@ export default async function HomePage() {
           "@context": "https://schema.org",
           "@type": "WebSite",
           name: "Next Fixture",
-          url: process.env.NEXT_PUBLIC_SITE_URL || "https://next-fixture.com",
+          url: process.env.NEXT_PUBLIC_SITE_URL as string,
           description: "Football predictions, match previews and betting tips for Europe's top leagues.",
           potentialAction: {
             "@type": "SearchAction",
             target: {
               "@type": "EntryPoint",
               urlTemplate: `${
-                process.env.NEXT_PUBLIC_SITE_URL || "https://next-fixture.com"
+                process.env.NEXT_PUBLIC_SITE_URL as string
               }/search?q={search_term_string}`,
             },
             "query-input": "required name=search_term_string",

@@ -20,7 +20,7 @@ import UpcomingFixtures from "@/components/football/UpcomingFixtures";
 
 export const revalidate = 7200; // 2 hours
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://next-fixture.com";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL as string;
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;

@@ -13,9 +13,9 @@ import { redisClient } from "@/lib/cache/redis";
 const FAILS_KEY = "cb:football:fails";
 const OPEN_KEY = "cb:football:open";
 
-const THRESHOLD = parseInt(process.env.API_FOOTBALL_CB_THRESHOLD || "3", 10);
-const WINDOW_SECONDS = parseInt(process.env.API_FOOTBALL_CB_WINDOW_SECONDS || "60", 10);
-const OPEN_SECONDS = parseInt(process.env.API_FOOTBALL_CB_OPEN_SECONDS || "30", 10);
+const THRESHOLD = parseInt(process.env.API_FOOTBALL_CB_THRESHOLD as string, 10);
+const WINDOW_SECONDS = parseInt(process.env.API_FOOTBALL_CB_WINDOW_SECONDS as string, 10);
+const OPEN_SECONDS = parseInt(process.env.API_FOOTBALL_CB_OPEN_SECONDS as string, 10);
 
 // --- Redis-backed state -----------------------------------------------------
 

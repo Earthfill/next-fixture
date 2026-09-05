@@ -24,8 +24,8 @@ export interface RateLimitResult {
   resetAt: number; // epoch ms when the window resets
 }
 
-const MAX = parseInt(process.env.RATE_LIMIT_MAX || "120", 10);
-const WINDOW_SECONDS = parseInt(process.env.RATE_LIMIT_WINDOW || "60", 10);
+const MAX = parseInt(process.env.RATE_LIMIT_MAX as string, 10);
+const WINDOW_SECONDS = parseInt(process.env.RATE_LIMIT_WINDOW as string, 10);
 const WINDOW_MS = WINDOW_SECONDS * 1000;
 
 // Per-scope stricter limits (fixtures/live are the most likely to be scraped).

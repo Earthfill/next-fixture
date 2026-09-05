@@ -47,7 +47,7 @@ function createPool(): Pool | null {
   // Sized conservatively: on serverless each invocation gets its own module
   // instance, so a small pool avoids exhausting the database. The Supabase
   // pooler (used here) multiplexes connections in front of us.
-  const max = parseInt(process.env.PG_POOL_MAX || "5", 10);
+  const max = parseInt(process.env.PG_POOL_MAX as string, 10);
 
   return new Pool({
     connectionString: url,

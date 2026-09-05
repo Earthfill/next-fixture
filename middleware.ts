@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || "*")
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS as string)
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
