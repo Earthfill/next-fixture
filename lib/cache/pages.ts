@@ -15,15 +15,14 @@
 // (this module pulls in ioredis/pg, which must never enter the client bundle).
 
 import { cacheAside } from "@/lib/cache";
-import { standingsKey, TTL } from "@/lib/cache/keys";
-import { siteToday } from "@/lib/dates";
+import { standingsKey, upcomingFixturesKey, UPCOMING_DAYS, TTL } from "@/lib/cache/keys";
 import type {
   Fixture, LeagueData, MatchdayGroup, MatchPreview, TopScorer, LineupEntry, Team, HighlightVideo,
 } from "@/lib/types";
 import {
   getUpcomingFixtures as getUpcomingFixturesRaw,
-  getAvailableMatchdays as getAvailableMatchdaysRaw,
-  getFixturesByDateGroupedByLeague as getFixturesByDateGroupedByLeagueRaw,
+  buildAvailableMatchdays,
+  buildMatchdayGroup,
   getLeagueStandings as getLeagueStandingsRaw,
   getTopScorers as getTopScorersRaw,
   getTopAssists as getTopAssistsRaw,
@@ -37,33 +36,27 @@ import { getYouTubeHighlights as getYouTubeHighlightsRaw } from "@/lib/football/
 
 /** Upcoming fixtures across all covered leagues (24h). */
 export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
-  const days = value ?? 3;
+  const days = value ?? UPCOMING_DAYS;
   const { data } = await cacheAside<Fixture[]>(
-    `fixtures:upcoming:${days}:${siteToday()}`,
+    upcomingFixturesKey(days),
     TTL.fixtures,
     () => getUpcomingFixturesRaw(days).then((r) => r ?? [])
   );
   return data ?? [];
 }
 
-/** Available matchdays for the homepage (24h). */
+/**
+ * Available matchdays for the homepage (24h). Derived from the SAME cached
+ * upcoming-fixtures list the cron prefetches — so the homepage no longer fires
+ * its own multi-league API calls (and can't get stuck empty for 24h).
+ */
 export async function getAvailableMatchdays(): Promise<{ date: string; label: string; slug: string; fixtureCount: number }[]> {
-  const { data } = await cacheAside<{ date: string; label: string; slug: string; fixtureCount: number }[]>(
-    `matchdays:available:${siteToday()}`,
-    TTL.fixtures,
-    () => getAvailableMatchdaysRaw().then((r) => r ?? [])
-  );
-  return data ?? [];
+  return buildAvailableMatchdays(await getUpcomingFixtures());
 }
 
-/** Fixtures for one date, grouped by league (24h。 */
+/** Fixtures for one date, grouped by league (24h). */
 export async function getFixturesByDateGroupedByLeague(date?: string): Promise<MatchdayGroup | null> {
-  const { data } = await cacheAside<MatchdayGroup | null>(
-    `matchday:${date ?? "first"}`,
-    TTL.fixtures,
-    () => getFixturesByDateGroupedByLeagueRaw(date)
-  );
-  return data ?? null;
+  return buildMatchdayGroup(await getUpcomingFixtures(), date);
 }
 
 /** League standings + upcoming fixtures (12h — SHARED key with /api/v1/standings). */

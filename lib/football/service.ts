@@ -127,8 +127,11 @@ export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
   return allFixtures.filter((f) => f.status !== "finished");
 }
 
-export async function getAvailableMatchdays(): Promise<{ date: string; label: string; slug: string; fixtureCount: number }[]> {
-  const fixtures = await getUpcomingFixtures();
+/**
+ * Pure transform: group fixtures by their date into an ordered matchday list.
+ * Exported so callers can reuse it without re-fetching fixtures.
+ */
+export function buildAvailableMatchdays(fixtures: Fixture[]): { date: string; label: string; slug: string; fixtureCount: number }[] {
   const dateMap = new Map<string, Fixture[]>();
   for (const f of fixtures) {
     const key = f.date.split("T")[0];
@@ -141,8 +144,11 @@ export async function getAvailableMatchdays(): Promise<{ date: string; label: st
   }).sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export async function getFixturesByDateGroupedByLeague(date?: string): Promise<MatchdayGroup | null> {
-  const fixtures = await getUpcomingFixtures();
+/**
+ * Pure transform: build one matchday's fixtures grouped by league from an
+ * already-fetched list. Exported so callers can reuse a single fixtures fetch.
+ */
+export function buildMatchdayGroup(fixtures: Fixture[], date?: string): MatchdayGroup | null {
   if (fixtures.length === 0) return null;
   if (!date) {
     const dates = [...new Set(fixtures.map((f) => f.date.split("T")[0]))].sort();
@@ -158,6 +164,14 @@ export async function getFixturesByDateGroupedByLeague(date?: string): Promise<M
     .sort((a, b) => LEAGUE_ORDER.indexOf(a.competition) - LEAGUE_ORDER.indexOf(b.competition));
   const d = new Date(date + "T12:00:00");
   return { date, label: d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }), slug: date, fixtureCount: dayFixtures.length, leagues };
+}
+
+export async function getAvailableMatchdays(): Promise<{ date: string; label: string; slug: string; fixtureCount: number }[]> {
+  return buildAvailableMatchdays(await getUpcomingFixtures());
+}
+
+export async function getFixturesByDateGroupedByLeague(date?: string): Promise<MatchdayGroup | null> {
+  return buildMatchdayGroup(await getUpcomingFixtures(), date);
 }
 
 export async function getLeagueStandings(leagueSlug: string): Promise<LeagueData | null> {

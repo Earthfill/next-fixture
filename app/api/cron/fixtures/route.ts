@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await fetchNext7DaysFixtures();
+    console.log("[cron:fixtures] done:", result);
     return NextResponse.json({ success: true, result });
   } catch (err) {
     console.error("[cron:fixtures] failed:", err);

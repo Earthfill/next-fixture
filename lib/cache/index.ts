@@ -56,6 +56,15 @@ function memorySet(key: string, data: unknown, ttlSeconds: number): void {
 
 // ─── Core read-through ──────────────────────────────────────────────────
 
+/**
+ * An "empty" result (an empty array) is NOT cached. Caching it would turn a
+ * transient API failure or quota hit into a 24h "no data" state, so we let the
+ * next request retry instead.
+ */
+function isEmptyResult(data: unknown): boolean {
+  return Array.isArray(data) && data.length === 0;
+}
+
 export async function cacheAside<T>(
   key: string,
   ttlSeconds: number,
@@ -93,7 +102,7 @@ export async function cacheAside<T>(
 
   // 4. Miss → fetch upstream and write back (read-through)
   const data = await fetcher();
-  if (data !== null && data !== undefined) {
+  if (data !== null && data !== undefined && !isEmptyResult(data)) {
     const payload = JSON.stringify(data);
     await Promise.allSettled([
       redisSet(key, payload, ttlSeconds),

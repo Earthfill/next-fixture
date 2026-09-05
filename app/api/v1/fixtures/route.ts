@@ -10,7 +10,8 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Fixture } from "@/lib/types";
 import { cacheAside } from "@/lib/cache";
 import { fixturesKey, TTL } from "@/lib/cache/keys";
-import { fetchFixtures, toDateString } from "@/lib/cache/fetchers";
+import { fetchFixtures } from "@/lib/cache/fetchers";
+import { siteToday } from "@/lib/dates";
 import { checkRateLimit } from "@/lib/api/rate-limiter";
 import { getQuota } from "@/lib/football/api";
 
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
 
   // 2. Parse query params
-  const date = searchParams.get("date") || toDateString(new Date());
+  const date = searchParams.get("date") || siteToday();
   const league = searchParams.get("league")?.trim() || undefined;
   const page = Math.max(parseInt(searchParams.get("page") || "1", 10) || 1, 1);
   const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "20", 10) || 20, 1), 50);

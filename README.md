@@ -82,7 +82,7 @@ CRON_SECRET=            # required to authorize Vercel Cron hitting /api/cron/fi
 # API_FOOTBALL_CB_OPEN_SECONDS=30
 
 # Site content timezone (used to compute "today" for fixtures/homepage)
-# SITE_TIMEZONE=Europe/London
+SITE_TIMEZONE=Africa/Lagos
 
 # Optional API-Football host override
 # API_FOOTBALL_HOST=v3.football.api-sports.io
