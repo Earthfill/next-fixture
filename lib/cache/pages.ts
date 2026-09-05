@@ -16,6 +16,7 @@
 
 import { cacheAside } from "@/lib/cache";
 import { standingsKey, TTL } from "@/lib/cache/keys";
+import { siteToday } from "@/lib/dates";
 import type {
   Fixture, LeagueData, MatchdayGroup, MatchPreview, TopScorer, LineupEntry, Team,
 } from "@/lib/types";
@@ -31,12 +32,13 @@ import {
   getTeamUpcomingFixtures as getTeamUpcomingFixturesRaw,
 } from "@/lib/football/service";
 import { getFixtureLineups as getFixtureLineupsRaw } from "@/lib/football/lineups";
+import { getFixtureOdds as getFixtureOddsRaw } from "@/lib/football/odds";
 
 /** Upcoming fixtures across all covered leagues (24h). */
 export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
   const days = value ?? 3;
   const { data } = await cacheAside<Fixture[]>(
-    `fixtures:upcoming:${days}`,
+    `fixtures:upcoming:${days}:${siteToday()}`,
     TTL.fixtures,
     () => getUpcomingFixturesRaw(days).then((r) => r ?? [])
   );
@@ -46,7 +48,7 @@ export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
 /** Available matchdays for the homepage (24h). */
 export async function getAvailableMatchdays(): Promise<{ date: string; label: string; slug: string; fixtureCount: number }[]> {
   const { data } = await cacheAside<{ date: string; label: string; slug: string; fixtureCount: number }[]>(
-    "matchdays:available",
+    `matchdays:available:${siteToday()}`,
     TTL.fixtures,
     () => getAvailableMatchdaysRaw().then((r) => r ?? [])
   );
@@ -144,4 +146,18 @@ export async function getFixtureLineups(
   );
 	
   return data ?? [];
+}
+
+/** Odds for a fixture (24h). */
+export async function getFixtureOdds(
+  fixtureId: string | number,
+  homeTeam: string,
+  awayTeam: string
+): Promise<Awaited<ReturnType<typeof getFixtureOddsRaw>>> {
+  const { data } = await cacheAside<Awaited<ReturnType<typeof getFixtureOddsRaw>>>(
+    `odds:${fixtureId}`,
+    TTL.odds,
+    () => getFixtureOddsRaw(fixtureId, homeTeam, awayTeam)
+  );
+  return data ?? ([] as Awaited<ReturnType<typeof getFixtureOddsRaw>>);
 }

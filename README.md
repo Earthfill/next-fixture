@@ -73,6 +73,9 @@ CORS_ORIGINS=*          # comma-separated, or * for all
 # DISABLE_CRON=true
 # CRON_TZ=UTC
 
+# Site content timezone (used to compute "today" for fixtures/homepage)
+# SITE_TIMEZONE=Europe/London
+
 # Optional API-Football host override
 # API_FOOTBALL_HOST=v3.football.api-sports.io
 ```

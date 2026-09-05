@@ -44,10 +44,8 @@ export {
 
 export {
   getTeamFixtures,
-  getFixtureLineup,
   getTeamInjuries,
   getTeamSquad,
-  getTeamCoach,
   getFixtureEvents,
   getPlayerStats,
 } from "@/lib/football-api";

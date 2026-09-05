@@ -61,13 +61,9 @@ export async function GET(
       fixtureKickoff: kickoff,
     };
 
-    // Use a 60-second s-maxage if either side is confirmed
-    const hasConfirmed = home.source === "confirmed" || away.source === "confirmed";
-    const cacheSeconds = hasConfirmed ? 60 : 300;
-
     return NextResponse.json(response, {
       headers: {
-        "Cache-Control": `public, s-maxage=${cacheSeconds}, stale-while-revalidate=${cacheSeconds * 2}`,
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
       },
     });
   } catch (err) {

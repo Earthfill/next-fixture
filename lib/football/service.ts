@@ -13,6 +13,7 @@ import {
   LEAGUE_IDS, LEAGUE_ID_TO_NAME, COMPETITION_LOGOS, COMPETITION_SLUGS,
   SLUG_TO_LEAGUE_ID, LEAGUE_ORDER, generateSlug, parseSlug, normalizeName,
 } from "@/lib/football/config";
+import { toSiteDate } from "@/lib/dates";
 
 // ─── Covered leagues cache (fetched once, cached aggressively) ────────
 
@@ -97,10 +98,13 @@ export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
   const leagues = await getCoveredLeagues();
   if (!leagues.length) return [];
 
-  const today = new Date().toISOString().split("T")[0];
+  // "Today" is resolved in the site's timezone (not UTC) so the fixture
+  // window starts on the correct local day — otherwise, shortly after local
+  // midnight, UTC still lags a day and yesterday's (finished) matches appear.
+  const today = toSiteDate(new Date());
   const endDate = new Date();
   endDate.setDate(endDate.getDate() + (value ?? 3));
-  const to = endDate.toISOString().split("T")[0];
+  const to = toSiteDate(endDate);
 
   // Fetch fixtures per league with from+to range
   const allFixtures: Fixture[] = [];
@@ -113,7 +117,9 @@ export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
     }
   }
 
-  return allFixtures;
+  // Only surface matches that have not finished yet — past-day fixtures
+  // (yesterday's results) must never appear on the "upcoming" homepage.
+  return allFixtures.filter((f) => f.status !== "finished");
 }
 
 export async function getAvailableMatchdays(): Promise<{ date: string; label: string; slug: string; fixtureCount: number }[]> {
@@ -186,10 +192,10 @@ export async function getLeagueStandings(leagueSlug: string): Promise<LeagueData
 
   // Fetch upcoming fixtures for THIS league only (1 API call) instead of
   // getUpcomingFixtures(7), which loops every league (~15 calls).
-  const today = new Date().toISOString().split("T")[0];
+  const today = toSiteDate(new Date());
   const end = new Date();
   end.setDate(end.getDate() + 7);
-  const to = end.toISOString().split("T")[0];
+  const to = toSiteDate(end);
   const upcoming = await fetchFixturesForRange(today, to, leagueSlug);
 
   return {
@@ -413,10 +419,10 @@ export async function getPastResults(leagueSlug: string, limit: number = 10): Pr
   const season = league?.season;
   if (!season) return [];
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = toSiteDate(new Date());
   const pastDate = new Date();
   pastDate.setDate(pastDate.getDate() - 7);
-  const from = pastDate.toISOString().split("T")[0];
+  const from = toSiteDate(pastDate);
 
   const data = await apiFetch<{ response: any[] }>(
     `/fixtures?league=${leagueId}&season=${season}&from=${from}&to=${today}&status=ft`

@@ -6,7 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import { apiFetch } from "@/lib/football/api";
-import type { ConfirmedLineupFixture, SquadPlayerWithRating, PlayerSeasonStats, FixtureEvent } from "@/lib/types";
+import type { SquadPlayerWithRating, PlayerSeasonStats, FixtureEvent } from "@/lib/types";
 
 // ─── Raw API response shapes (internal) ────────────────────────────────
 
@@ -19,13 +19,6 @@ interface ApiFixtureResponse {
     halftime: { home: number | null; away: number | null };
     fulltime: { home: number | null; away: number | null };
   };
-}
-
-interface ApiLineupResponse {
-  team: { id: number; name: string; logo: string };
-  formation: string;
-  startXI: { player: { id: number; name: string; number: number; pos: string; grid: string | null } }[];
-  substitutes: { player: { id: number; name: string; number: number; pos: string; grid: string | null } }[];
 }
 
 interface ApiInjuryResponse {
@@ -77,36 +70,6 @@ export async function getTeamFixtures(
     awayScore: f.goals.away,
     opponentId: f.teams.home.id === teamId ? f.teams.away.id : f.teams.home.id,
   }));
-}
-
-/**
- * Get confirmed lineups for a past fixture (both teams).
- * Returns array of lineup entries (one per team).
- */
-export async function getFixtureLineup(
-  fixtureId: number,
-  teamId: number
-): Promise<ConfirmedLineupFixture | null> {
-  const data = await apiFetch<{ response: ApiLineupResponse[] }>(
-    `/fixtures/lineups?fixture=${fixtureId}`
-  );
-  if (!data?.response?.length) return null;
-
-  const entry = data.response.find((l) => l.team.id === teamId);
-  if (!entry || !entry.startXI?.length) return null;
-
-  return {
-    fixtureId,
-    formation: entry.formation,
-    startXI: entry.startXI.map((s) => ({
-      player: {
-        id: s.player.id,
-        name: s.player.name,
-        number: s.player.number,
-        pos: s.player.pos,
-      },
-    })),
-  };
 }
 
 /**
@@ -173,21 +136,6 @@ export async function getPlayerStats(
     teamId: stats.team.id,
   };
 }
-/**
- * Fetch current coach/manager for a team.
- * Uses /coachs endpoint, returns response[0].name per spec.
- */
-export async function getTeamCoach(
-  teamId: number
-): Promise<{ name: string; photo: string } | null> {
-  const data = await apiFetch<{ response: { id: number; name: string; photo: string }[] }>(
-    `/coachs?team=${teamId}`
-  );
-  if (!data?.response?.[0]) return null;
-  const coach = data.response[0];
-  return { name: coach.name, photo: coach.photo || "" };
-}
-
 /**
  * Get full squad with positions and ratings.
  * Used as fallback for players with no recent lineup history.

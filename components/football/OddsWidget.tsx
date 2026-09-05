@@ -2,7 +2,7 @@
 // OddsWidget — Dynamic odds comparison with tabbed market views
 // ---------------------------------------------------------------------------
 
-import { getFixtureOdds } from "@/lib/sports-api";
+import { getFixtureOdds } from "@/lib/cache/pages";
 import OddsTabbedView from "./OddsTabbedView";
 
 interface OddsWidgetProps {

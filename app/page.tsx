@@ -35,7 +35,6 @@ export default async function HomePage() {
   const matchdays = await getAvailableMatchdays();
   const { articles: news } = await getFootballNews();
 
-
   // Fetch all matchdays in parallel
   const matchdayResults = await Promise.all(
     matchdays.map((md) => getFixturesByDateGroupedByLeague(md.slug))
