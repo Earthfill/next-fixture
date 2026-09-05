@@ -4,18 +4,17 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run migrate && next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "cron": "tsx scripts/cron-worker.ts",
     "job:fixtures": "tsx scripts/run-job.ts fixtures",
     "job:live": "tsx scripts/run-job.ts live",
-    "check:infra": "tsx scripts/check-infra.ts"
+    "check:infra": "tsx scripts/check-infra.ts",
+    "migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
-    "@types/node-cron": "^3.0.11",
-    "@types/pg": "^8.23.1",
     "@vercel/analytics": "^2.0.1",
     "ioredis": "^6.0.0",
     "lucide-react": "^1.38.0",
@@ -28,6 +27,8 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

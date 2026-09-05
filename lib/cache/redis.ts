@@ -58,6 +58,14 @@ async function ensureConnected(): Promise<Redis | null> {
   return client;
 }
 
+/**
+ * Expose the connected client for advanced/atomic commands (INCR, EVAL, ...).
+ * Returns null when Redis is not configured or currently unavailable.
+ */
+export async function redisClient(): Promise<Redis | null> {
+  return ensureConnected();
+}
+
 /** Get a raw value from Redis, or null when missing/unavailable. */
 export async function redisGet(key: string): Promise<string | null> {
   const client = await ensureConnected();

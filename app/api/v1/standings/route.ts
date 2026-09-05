@@ -17,7 +17,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const rl = checkRateLimit(request, "standings");
+  const rl = await checkRateLimit(request, "standings");
   if (!rl.allowed) {
     const retryAfter = Math.max(Math.ceil((rl.resetAt - Date.now()) / 1000), 1);
     return NextResponse.json(

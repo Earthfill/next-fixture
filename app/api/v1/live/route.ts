@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// GET /api/v1/live — Currently-live matches (30s cache)
+// GET /api/v1/live — Currently-live matches (24h cache)
 // ---------------------------------------------------------------------------
 // Returns only matches with status "live". Because the TTL is extremely short,
 // a page refresh returns near-real-time scores from the cache-aside layer.
@@ -17,7 +17,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const rl = checkRateLimit(request, "live");
+  const rl = await checkRateLimit(request, "live");
   if (!rl.allowed) {
     const retryAfter = Math.max(Math.ceil((rl.resetAt - Date.now()) / 1000), 1);
     return NextResponse.json(

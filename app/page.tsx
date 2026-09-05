@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { Metadata } from "next";
+import Script from "next/script";
 import { getAvailableMatchdays, getFixturesByDateGroupedByLeague } from "@/lib/cache/pages";
 import { getFootballNews } from "@/lib/news";
 import NewsSection from "@/components/football/NewsSection";
@@ -31,6 +32,16 @@ export const metadata: Metadata = {
   },
 };
 
+/** Serialize an object to a JSON-LD string safe for inline <script> injection. */
+function jsonLdScript(obj: unknown): string {
+  return JSON.stringify(obj)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 export default async function HomePage() {
   const matchdays = await getAvailableMatchdays();
   const { articles: news } = await getFootballNews();
@@ -45,28 +56,25 @@ export default async function HomePage() {
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6">
       {/* JSON-LD Structured Data */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "WebSite",
-            name: "Next Fixture",
-            url: process.env.NEXT_PUBLIC_SITE_URL || "https://next-fixture.com",
-            description: "Football predictions, match previews and betting tips for Europe's top leagues.",
-            potentialAction: {
-              "@type": "SearchAction",
-              target: {
-                "@type": "EntryPoint",
-                urlTemplate: `${
-                  process.env.NEXT_PUBLIC_SITE_URL || "https://next-fixture.com"
-                }/search?q={search_term_string}`,
-              },
-              "query-input": "required name=search_term_string",
+      <Script id="site-jsonld" type="application/ld+json" strategy="afterInteractive">
+        {jsonLdScript({
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "Next Fixture",
+          url: process.env.NEXT_PUBLIC_SITE_URL || "https://next-fixture.com",
+          description: "Football predictions, match previews and betting tips for Europe's top leagues.",
+          potentialAction: {
+            "@type": "SearchAction",
+            target: {
+              "@type": "EntryPoint",
+              urlTemplate: `${
+                process.env.NEXT_PUBLIC_SITE_URL || "https://next-fixture.com"
+              }/search?q={search_term_string}`,
             },
-          }),
-        }}
-      />
+            "query-input": "required name=search_term_string",
+          },
+        })}
+      </Script>
 
       <h1 className="sm-heading-lg mb-2">
         Football Previews &amp; Predictions

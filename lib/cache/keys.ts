@@ -6,7 +6,7 @@
 export const TTL = {
   fixtures: 24 * 60 * 60, // 24h - schedules / leagues
   standings: 24 * 60 * 60, // 24h - league tables
-  live: 60 * 60, // 1h - active live matches
+  live: 24 * 60 * 60, // 24h - live matches (served on-demand)
   preview: 24 * 60 * 60, // 24h - match previews
   lineups: 24 * 60 * 60, // 24h - lineups
   odds: 24 * 60 * 60, // 24h - odds

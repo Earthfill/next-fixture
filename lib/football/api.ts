@@ -5,6 +5,8 @@
 // request cycle. No cross-request caching  ISR handles that.
 // ---------------------------------------------------------------------------
 
+import { isCircuitOpen, recordFailure, recordSuccess } from "@/lib/football/circuit-breaker";
+
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 const RAPIDAPI_HOST = process.env.API_FOOTBALL_HOST || "v3.football.api-sports.io";
 const API_BASE = "https://" + RAPIDAPI_HOST;
@@ -66,8 +68,23 @@ export async function apiFetch<T>(path: string): Promise<T | null> {
   }
 
   const promise = (async () => {
-    await acquireRateSlot(); // throttle: stay under the per-minute limit
-    return fetchWithRetry<T>(path);
+    if (await isCircuitOpen()) {
+      console.warn("[api-football] circuit breaker open - short-circuiting request");
+      return null;
+    }
+    try {
+      await acquireRateSlot(); // throttle: stay under the per-minute limit
+      const result = await fetchWithRetry<T>(path);
+      if (result === null) {
+        await recordFailure();
+      } else {
+        await recordSuccess();
+      }
+      return result;
+    } catch {
+      await recordFailure();
+      return null;
+    }
   })();
   dedupCache.set(path, promise);
   promise.finally(() => dedupCache.delete(path));

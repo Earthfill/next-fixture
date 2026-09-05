@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   // 1. Rate limit per IP
-  const rl = checkRateLimit(request, "fixtures");
+  const rl = await checkRateLimit(request, "fixtures");
   if (!rl.allowed) {
     const retryAfter = Math.max(Math.ceil((rl.resetAt - Date.now()) / 1000), 1);
     return NextResponse.json(

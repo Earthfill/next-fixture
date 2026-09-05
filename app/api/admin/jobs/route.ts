@@ -12,6 +12,7 @@ import { clearAllCaches } from "@/lib/cache";
 import { pgMatchesClear } from "@/lib/cache/postgres";
 import { getQuota, clearApiCache } from "@/lib/football/api";
 import { resetCoveredLeagues } from "@/lib/football/service";
+import { resetCircuitBreaker } from "@/lib/football/circuit-breaker";
 import { clearAllCache as clearLineupCache } from "@/lib/lineup-service";
 
 export const runtime = "nodejs";
@@ -56,6 +57,7 @@ export async function POST(request: NextRequest) {
         clearApiCache();
         resetCoveredLeagues();
         clearLineupCache();
+        await resetCircuitBreaker();
 
         // 2. Cache-aside tiers (memory, Redis, PostgreSQL api_cache).
         const cacheResult = await clearAllCaches();

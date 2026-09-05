@@ -5,7 +5,7 @@ import "./globals.css";
 import Header from "@/components/common/Header";
 import Footer from "@/components/common/Footer";
 import CookieConsentBanner from "@/components/common/CookieConsentBanner";
-// import { Analytics } from "@vercel/analytics/next";
+import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -69,7 +69,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.className}>
       <body className="min-h-screen flex flex-col bg-white text-[#1a1a1a]">
-        {/* <Analytics /> */}
+        <Analytics />
         <Header />
         <main className="flex-1 w-full">{children}</main>
         <Footer />

@@ -25,8 +25,8 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 | Endpoint | Description | Query params |
 |-----------|-------------|--------------|
 | `GET /api/v1/fixtures` | Fixture schedules (read-through 24h cache) | `date=YYYY-MM-DD`, `league=<slug>`, `page`, `limit` (≤50) |
-| `GET /api/v1/standings` | League standings (+ upcoming fixtures),12h cache) | `league=<slug>` (required) |
-| `GET /api/v1/live` | Live matches (30s cache) | `page`, `limit` (≤100) |
+| `GET /api/v1/standings` | League standings (+ upcoming fixtures), 24h cache) | `league=<slug>` (required) |
+| `GET /api/v1/live` | Live matches (24h cache) | `page`, `limit` (≤100) |
 
 Every response includes `meta.source` (`redis` | `postgres` | `memory` | `api`) and
 `meta.quota` — the last observed API-Football rate-limit headers (`limit` / `used` / `remaining`).
@@ -43,15 +43,16 @@ curl "http://localhost:3000/api/v1/live"
 
 | Command | What it does |
 |---------|--------------|
-| `npm run cron` | Start the long-running scheduler (midnight fixtures + 30s live poll; set `DISABLE_CRON=true` to turn off) |
+| `npm run migrate` | Apply DB migrations once (creates `api_cache` + `matches` tables) |
+| `npm run cron` | Local/container scheduler (midnight fixtures prefetch; set `DISABLE_CRON=true` to turn off) |
 | `npm run job:fixtures` | Run the 7-day fixture prefetch once (what midnight runs daily) |
 | `npm run job:live` | Run the live-poll once (gated by active matches) |
 
 - **Midnight job** (`0 0 * * *`): fetches the next 7 days of fixtures across all covered
-  leagues into the cache layer ais well ais the PostgreSQL `matches` table.
-- **Live-poll job** (`*/30 * * * * *`): polls live scores every 30 seconds **only when**
-  active live matches exist in the database — preservingthe API-Football quota
-  (if no match is live or kicking off within 30 minutes,the upstream call is skipped).
+  leagues into the cache layer and the PostgreSQL `matches` table. In production
+  this runs as a **Vercel Cron** hitting `/api/cron/fixtures` (set `CRON_SECRET` to authorize it).
+- **Live scores** are served on-demand via the cache-aside layer (24h TTL) — there is
+  no scheduled live poll in production.
 
 ### Environment variables
 
@@ -61,17 +62,24 @@ See `.env.example` for the full list. Key additions:
 # Redis — hot cache tier (leave empty to fall back to PostgreSQL / in-memory)
 REDIS_URL=redis://localhost:6379
 
-# PostgreSQL — durable cache tier + matches table (auto-creates tables on first use)
+# PostgreSQL — durable cache tier + matches table (run `npm run migrate` to create)
 DATABASE_URL=postgresql://user:pass@localhost:5432/nextfixture
+# PG_POOL_MAX=5        # optional: max pg pool size (default 5)
 
-# Rate limiting (sliding window per IP) / CORS
+# Rate limiting (fixed window per IP, Redis-backed) / CORS
 RATE_LIMIT_MAX=120
 RATE_LIMIT_WINDOW=60
 CORS_ORIGINS=*          # comma-separated, or * for all
 
-# Cron
+# Cron / Vercel Cron
 # DISABLE_CRON=true
 # CRON_TZ=UTC
+CRON_SECRET=            # required to authorize Vercel Cron hitting /api/cron/fixtures
+
+# Circuit breaker for API-Football (defaults shown)
+# API_FOOTBALL_CB_THRESHOLD=3
+# API_FOOTBALL_CB_WINDOW_SECONDS=60
+# API_FOOTBALL_CB_OPEN_SECONDS=30
 
 # Site content timezone (used to compute "today" for fixtures/homepage)
 # SITE_TIMEZONE=Europe/London
@@ -85,18 +93,20 @@ CORS_ORIGINS=*          # comma-separated, or * for all
 | Data | TTL |
 |------|-----|
 | Fixture schedules / leagues | 24 hours |
-| Standings | 12 hours |
-| Active live matches | 30 seconds |
+| Standings | 24 hours |
+| Live matches | 24 hours |
 
 ### Notes
 
-- Rate limiting is a **sliding-window in-memory limiter** per IP + scope (Next.js
-  Route Handlers don't run Express middleware, so `express-rate-limit` isn't applicable;.
-  Defaults: 120 req/min/IP; override with `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW`.
+- Rate limiting is a **Redis-backed fixed-window limiter** per IP + scope (shared across
+  serverless instances; falls back to in-memory if Redis is down). Defaults: 120 req/min/IP;
+  override with `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW`.
 - CORS is enabled for all `/api/*` routes via `middleware.ts` (Next.js v16 suggests renaming
-  to `proxy.ts` for new projects)....
+  to `proxy.ts` for new projects).
 - All cache layers degrade gracefully — if Redis or PostgreSQL are unreachable, the app
-  continues with the remaining tiers and never crashes..
+  continues with the remaining tiers and never crashes.
+- API-Football calls are protected by a circuit breaker (3 failures in 60s → open for 30s),
+  shared across instances via Redis.
 
 ## Learn More
 

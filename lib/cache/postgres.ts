@@ -1,255 +1,126 @@
 // ---------------------------------------------------------------------------
 // PostgreSQL cache/durable store - pg Pool with graceful degradation
 // ---------------------------------------------------------------------------
-// Two tables:
+// Two tables (created by `npm run migrate`, NOT at runtime):
 //   api_cache - key/value TTL store (the "PostgreSQL" tier of the cache-aside
 //               pattern). Lives behind Redis as the durable layer.
 //   matches   - one row per fixture. Used by the live-poll job to determine
 //               whether "active live matches are occurring in the database"
 //               before spending an API-Football request.
-
+//
 // If DATABASE_URL is missing/unreachable the layer silently disables itself.
-
-
 
 import { Pool } from "pg";
 
 import type { Fixture } from "@/lib/types";
 
-
-
 let pool: Pool | null = null;
-
 let available = false;
-
 let initPromise: Promise<boolean> | null = null;
 
-
-
 const KV_TABLE = "api_cache";
-
 const MATCHES_TABLE = "matches";
 
-
-
 /** Fixture statuses from apiFixtureToFixture() ("upcoming" | "live" | "finished"). */
-
 function matchesStillActive(): string {
-
   return `(
-
     status = 'live'
-
     OR (
-
       status = 'upcoming'
-
       AND kickoff BETWEEN now() - interval '3 hours' AND now() + interval '30 minutes'
-
     )
-
   )`;
-
 }
-
-
-
-
 
 function createPool(): Pool | null {
-
   const url = process.env.DATABASE_URL;
-
-
-
   if (!url) return null;
 
-
-
   // Supabase (and most managed Postgres) REQUIRE TLS for direct connections.
-
-
-
   // Detect it via the host suffix or an explicit sslmode param - avoids the
+  // "no pg_hba.conf entry / SSL required" errors once DNS starts resolving.
+  const needsSsl =
+    /\.supabase\.co/i.test(url) ||
+    /\.supabase\.com/i.test(url) ||
+    /sslmode=require|sslmode=verify-full/i.test(url);
 
-
-
-  // "no pg_hba.conf entry / SSL required" errors once DNS starts resolving..
-
-
-
-  const needsSsl = /\.supabase\.co/i.test(url) || /\.supabase\.com/i.test(url) || /sslmode=require|sslmode=verify-full/i.test(url);
-
-
+  // Sized conservatively: on serverless each invocation gets its own module
+  // instance, so a small pool avoids exhausting the database. The Supabase
+  // pooler (used here) multiplexes connections in front of us.
+  const max = parseInt(process.env.PG_POOL_MAX || "5", 10);
 
   return new Pool({
-
     connectionString: url,
-
-    max:  ​5,
-
+    max,
     idleTimeoutMillis: 30_000,
-
     connectionTimeoutMillis: 3000,
-
+    // Bound any single query so a stuck statement cannot hold a connection open.
+    statement_timeout: 10_000,
     ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
-
   });
-
 }
 
-
-
-
-
-/** Initialize schema on first use. Safe to call repeatedly. */
-
+/**
+ * Initialize the pool (connect + cheap availability check). This intentionally
+ * does NOT run any DDL - schema is applied once at deploy time by
+ * `npm run migrate` (scripts/migrate.ts). Safe to call repeatedly.
+ */
 export async function initPostgres(): Promise<boolean> {
-
-
-
   if (initPromise) return initPromise;
 
-
-
   if (!process.env.DATABASE_URL) {
-
     initPromise = Promise.resolve(false);
-
     return initPromise;
-
   }
 
-
-
   initPromise = (async () => {
-
     try {
-
       pool = createPool();
-
       if (!pool) return false;
-
-
-
-      await pool.query(`
-
-        CREATE TABLE IF NOT EXISTS "${KV_TABLE}" (
-
-          cache_key  TEXT PRIMARY KEY,
-
-          payload    JSONB NOT NULL,
-
-          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-          expires_at TIMESTAMPTZ NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS "${MATCHES_TABLE}" (
-          id         TEXT PRIMARY KEY,
-          league     TEXT NOT NULL,
-          season     INT,
-          home_team  TEXT NOT NULL,
-          away_team  TEXT NOT NULL,
-          kickoff    TIMESTAMPTZ NOT NULL,
-          status     TEXT NOT NULL,
-          home_score INT,
-          away_score INT,
-          payload    JSONB NOT NULL DEFAULT '{}',
-          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-        );
-        CREATE INDEX IF NOT EXISTS idx_api_cache_expires ON "${KV_TABLE}" (expires_at);
-        CREATE INDEX IF NOT EXISTS idx_matches_status ON "${MATCHES_TABLE}" (status);
-        CREATE INDEX IF NOT EXISTS idx_matches_kickoff ON "${MATCHES_TABLE}" (kickoff);
-      `);
-
+      await pool.query("SELECT 1");
       available = true;
     } catch (err) {
       available = false;
+      pool = null;
+      initPromise = null; // allow a retry on the next request
       console.warn("[cache:pg] unavailable:", (err as Error).message);
     }
     return available;
   })();
 
-
-
   return initPromise;
-
 }
-
-
-
-
 
 export function pgAvailable(): boolean {
-
   return available;
-
 }
 
-
-
-
-
-// ---------- Key/Value cache tier -------------------------------------
-
+// ---------- Key/Value cache tier -------------------------------------------
 
 export async function pgCacheGet<T>(key: string): Promise<T | null> {
-
-
-
   if (!pool || !available) return null;
-
-
-
   try {
-
     const res = await pool.query(
-
       `SELECT payload FROM "${KV_TABLE}" WHERE cache_key = $1 AND expires_at > now()`,
-
       [key]
-
     );
-
     return (res.rows[0]?.payload as T) ?? null;
-
   } catch (err) {
-
     console.warn("[cache:pg] get failed:", (err as Error).message);
-
     return null;
-
   }
-
 }
 
-
-
-
-
 export async function pgCacheSet(key: string, payload: unknown, ttlSeconds: number): Promise<boolean> {
-
-
-
   if (!pool || !available) return false;
-
-
-
   try {
-
     await pool.query(
-
       `INSERT INTO "${KV_TABLE}" (cache_key, payload, expires_at)
-
        VALUES ($1, $2, now() + make_interval(secs => $3))
-
        ON CONFLICT (cache_key)
-
        DO UPDATE SET payload = EXCLUDED.payload, expires_at = EXCLUDED.expires_at`,
-
       [key, JSON.stringify(payload), ttlSeconds]
-
     );
-
     return true;
   } catch (err) {
     console.warn("[cache:pg] set failed:", (err as Error).message);
@@ -264,8 +135,9 @@ export async function pgCacheDelete(key: string): Promise<void> {
   } catch {
     // non-fatal
   }
-}// ---------- Matches table (durable source for the live-poll gate) -------
+}
 
+// ---------- Matches table (durable source for the live-poll gate) ----------
 
 export async function upsertMatches(fixtures: Fixture[]): Promise<void> {
   if (!pool || !available || !fixtures.length) return;
@@ -301,13 +173,10 @@ export async function upsertMatches(fixtures: Fixture[]): Promise<void> {
   }
 }
 
-
 /**
  * Does the database currently contain "active live matches"?
- * Returns:
- *   true  - matches exist that are live (or kicking off within minutes)
- *   false - no live matches at all
- *   null  - PostgreSQL unavailable (caller falls back to Redis/cached gate)
+ * Returns true/false, or null when PostgreSQL is unavailable (caller falls
+ * back to the cache-tier gate).
  */
 export async function pgHasActiveLiveMatches(): Promise<boolean | null> {
   if (!pool || !available) return null;
@@ -324,11 +193,7 @@ export async function pgHasActiveLiveMatches(): Promise<boolean | null> {
   }
 }
 
-
-/**
- * Mark any fixture previously stored as "live" that is no longer in the live
- * feed as finished - keeps the matches table tidy after full-time whistle.
- */
+/** Mark live fixtures no longer in the live feed as finished. */
 export async function finalizeStaleLiveMatches(activeLiveIds: Set<string>): Promise<void> {
   if (!pool || !available) return;
   try {
@@ -349,7 +214,9 @@ export function shutdownPg(): void {
     pool = null;
     available = false;
   }
-}// ---------- Clear all cached rows (admin "Clear Cache" action) ----------
+}
+
+// ---------- Clear all cached rows (admin "Clear Cache" action) -------------
 
 export async function pgCacheClear(): Promise<boolean> {
   if (!pool || !available) return false;
@@ -361,7 +228,7 @@ export async function pgCacheClear(): Promise<boolean> {
   }
 }
 
-/** Clear the `matches` table (live-poll gate source data). Used by admin "Clear Cache". */
+/** Clear the `matches` table (live-poll gate source data). */
 export async function pgMatchesClear(): Promise<boolean> {
   if (!pool || !available) return false;
   try {
