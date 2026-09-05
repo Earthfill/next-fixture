@@ -21,7 +21,13 @@ function formatDateLabel(iso: string): string {
 }
 
 export default function MatchdayList({ matchdays }: Props) {
-  const [openDays, setOpenDays] = useState<Record<string, boolean>>({});
+  const [openDays, setOpenDays] = useState<Record<string, boolean>>(() => {
+    const initialState: Record<string, boolean> = {};
+    matchdays.forEach((matchday, index) => {
+      initialState[matchday.slug] = index === 0;
+    });
+    return initialState;
+  });
 
   const toggleDay = (slug: string) => {
     setOpenDays((prev) => ({ ...prev, [slug]: !prev[slug] }));
@@ -30,7 +36,7 @@ export default function MatchdayList({ matchdays }: Props) {
   return (
     <div className="space-y-10">
       {matchdays.map((matchday, idx) => {
-        const isOpen = openDays[matchday.slug] !== false; // default open (closes only on user action)
+        const isOpen = openDays[matchday.slug] ?? false; // default open (closes only on user action)
 
         return (
           <section key={matchday.date}>
@@ -59,7 +65,7 @@ export default function MatchdayList({ matchdays }: Props) {
 
             {/* League sections — collapsible */}
             <div
-              className={`overflow-hidden transition-all duration-300 ${isOpen ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
+              className={`overflow-hidden transition-all duration-300 ${isOpen ? "opacity-100" : "max-h-0 opacity-0"
                 }`}
             >
               <div className="space-y-6">

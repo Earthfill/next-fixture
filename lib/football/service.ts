@@ -108,7 +108,7 @@ export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
   // midnight, UTC still lags a day and yesterday's (finished) matches appear.
   const today = toSiteDate(new Date());
   const endDate = new Date();
-  endDate.setDate(endDate.getDate() + (value ?? 3));
+  endDate.setDate(endDate.getDate() + (value ?? 2));
   const to = toSiteDate(endDate);
 
   // Fetch fixtures per league with from+to range
@@ -159,7 +159,6 @@ export async function getFixturesByDateGroupedByLeague(date?: string): Promise<M
   const d = new Date(date + "T12:00:00");
   return { date, label: d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }), slug: date, fixtureCount: dayFixtures.length, leagues };
 }
-
 
 export async function getLeagueStandings(leagueSlug: string): Promise<LeagueData | null> {
   const leagueId = SLUG_TO_LEAGUE_ID[leagueSlug];
