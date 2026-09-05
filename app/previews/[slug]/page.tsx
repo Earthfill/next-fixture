@@ -12,7 +12,7 @@ import OddsWidget from "@/components/football/OddsWidget";
 import { getFixtureLineups, getTeamUpcomingFixtures, getLeagueStandings, getFixtureOdds } from "@/lib/cache/pages";
 import { computePrediction } from "@/lib/football/win-probability";
 import { generateNlgAnalysis } from "@/lib/football/nlg-analysis";
-import AdSlot from "@/components/common/AdSlot";
+// import AdSlot from "@/components/common/AdSlot";
 import PredictionCard from "@/components/football/PredictionCard";
 import WinProbability from "@/components/football/WinProbability";
 import TeamNews from "@/components/football/TeamNews";
@@ -161,7 +161,7 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
             />
           </div>
           <div className="flex items-start justify-center lg:justify-end">
-            <AdSlot slotId="preview-rect-1" format="rectangle" />
+            {/* <AdSlot slotId="preview-rect-1" format="rectangle" /> */}
           </div>
         </div>
 
@@ -217,7 +217,7 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
 
         {/* 11. Bottom ad */}
         <div className="mt-8 flex justify-center">
-          <AdSlot slotId="preview-leaderboard-2" format="leaderboard" />
+          {/* <AdSlot slotId="preview-leaderboard-2" format="leaderboard" /> */}
         </div>
       </article>
     </>

@@ -1,9 +1,10 @@
 // ---------------------------------------------------------------------------
-// Middleware — CORS for the public API (/api/v1/*)
+// Middleware — admin gate + CORS for the public API (/api/v1/*)
 // ---------------------------------------------------------------------------
-// Adds permissive CORS headers so the React/Next frontend (or any web client)
-// can call /api/v1/fixtures, /api/v1/standings and /api/v1/live directly.
-// Restrict origins via CORS_ORIGINS="https://a.com,https://b.com" in .env.
+// 1. /admin is only reachable via the /earthfill handshake (a short-lived
+//    nf_admin_key cookie set by that route). Everything else bounces to /.
+// 2. Adds permissive CORS headers so the frontend (or any web client) can call
+//    /api/v1/* directly. Restrict origins via CORS_ORIGINS in .env.
 // ---------------------------------------------------------------------------
 
 import { NextRequest, NextResponse } from "next/server";
@@ -25,8 +26,21 @@ const CORS_HEADERS = {
 };
 
 export function middleware(request: NextRequest) {
-  // Only involved for API routes — everything else passes straight through.
-  if (!request.nextUrl.pathname.startsWith("/api")) {
+  const { pathname } = request.nextUrl;
+
+  // 1. Admin gate — /admin is only reachable via the /earthfill handshake.
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    if (request.cookies.get("nf_admin_key")?.value !== "1") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
+  }
+
+  // 2. CORS for the public API — everything else passes straight through.
+  if (!pathname.startsWith("/api")) {
     return NextResponse.next();
   }
 
@@ -48,5 +62,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*"],
+  matcher: ["/admin", "/admin/:path*", "/api/:path*"],
 };
