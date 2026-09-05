@@ -360,3 +360,14 @@ export async function pgCacheClear(): Promise<boolean> {
     return false;
   }
 }
+
+/** Clear the `matches` table (live-poll gate source data). Used by admin "Clear Cache". */
+export async function pgMatchesClear(): Promise<boolean> {
+  if (!pool || !available) return false;
+  try {
+    await pool.query(`DELETE FROM "${MATCHES_TABLE}"`);
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -18,7 +18,7 @@ import { cacheAside } from "@/lib/cache";
 import { standingsKey, TTL } from "@/lib/cache/keys";
 import { siteToday } from "@/lib/dates";
 import type {
-  Fixture, LeagueData, MatchdayGroup, MatchPreview, TopScorer, LineupEntry, Team,
+  Fixture, LeagueData, MatchdayGroup, MatchPreview, TopScorer, LineupEntry, Team, HighlightVideo,
 } from "@/lib/types";
 import {
   getUpcomingFixtures as getUpcomingFixturesRaw,
@@ -33,6 +33,7 @@ import {
 } from "@/lib/football/service";
 import { getFixtureLineups as getFixtureLineupsRaw } from "@/lib/football/lineups";
 import { getFixtureOdds as getFixtureOddsRaw } from "@/lib/football/odds";
+import { getYouTubeHighlights as getYouTubeHighlightsRaw } from "@/lib/football/highlights";
 
 /** Upcoming fixtures across all covered leagues (24h). */
 export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
@@ -160,4 +161,37 @@ export async function getFixtureOdds(
     () => getFixtureOddsRaw(fixtureId, homeTeam, awayTeam)
   );
   return data ?? ([] as Awaited<ReturnType<typeof getFixtureOddsRaw>>);
+}
+
+/** YouTube highlights for a fixture — cached 24h (Redis → PG → mem). */
+export async function getYouTubeHighlights(
+  homeTeam: string,
+  awayTeam: string,
+  competition: string,
+  date: string,
+  maxResults: number = 3
+): Promise<HighlightVideo[]> {
+  const key = [
+    "youtube:highlights",
+    cacheKeyPart(homeTeam),
+    cacheKeyPart(awayTeam),
+    cacheKeyPart(competition),
+    (date || "").split("T")[0],
+    maxResults,
+  ].join(":");
+  const { data } = await cacheAside<HighlightVideo[]>(
+    key,
+    TTL.fixtures,
+    () => getYouTubeHighlightsRaw(homeTeam, awayTeam, competition, date, maxResults)
+  );
+  return data ?? [];
+}
+
+/** Normalize a free-text term into a stable, URL-safe cache-key segment. */
+function cacheKeyPart(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }

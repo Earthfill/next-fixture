@@ -90,7 +90,7 @@ async function fetchFixtureMeta(fixtureId: number): Promise<FixtureMeta | null> 
     `https://v3.football.api-sports.io/fixtures?id=${fixtureId}`,
     {
       headers: { "x-apisports-key": RAPIDAPI_KEY } as HeadersInit,
-      next: { revalidate: 3600 },
+      next: { revalidate: 3600, tags: ["lineups"] },
     }
   );
 

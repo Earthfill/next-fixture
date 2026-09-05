@@ -4,13 +4,12 @@
 import Image from "next/image";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getLeagueStandings, getTopScorers, getTopAssists, getPastResults } from "@/lib/cache/pages";
+import { getLeagueStandings, getTopScorers, getTopAssists, getPastResults, getYouTubeHighlights } from "@/lib/cache/pages";
 import { getFootballNews } from "@/lib/news";
 import { Goal } from "lucide-react";
 import NewsSection from "@/components/football/NewsSection";
 import PastResults from "@/components/football/PastResults";
 import VideoHighlights from "@/components/football/VideoHighlights";
-import { getYouTubeHighlights } from "@/lib/sports-api";
 
 const leagueNames: Record<string, string> = {
   "premier-league": "Premier League", "la-liga": "La Liga",
@@ -58,7 +57,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ "league
 
   const highlights = (await Promise.all(
     topMatches.map((m) =>
-      getYouTubeHighlights(m.homeTeam.name, m.awayTeam.name, m.competition, m.date, 1)
+      getYouTubeHighlights(m.homeTeam.name, m.awayTeam.name, m.competition, m.date, 3)
     )
   )).flat();
 

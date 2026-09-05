@@ -45,7 +45,7 @@ export async function getFootballNews(options?: { pageSize?: number; page?: numb
       `page-size=${pageSize}&` +
       `page=${page}&` +
       `api-key=${GUARDIAN_API_KEY}`,
-      { next: { revalidate: 1800 } as any }
+      { next: { revalidate: 1800, tags: ["news"] } as any }
     );
 
     if (!res.ok) {

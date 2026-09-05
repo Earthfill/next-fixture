@@ -66,6 +66,11 @@ async function getCoveredLeagues(): Promise<CoveredLeague[]> {
   return coveredLeaguesCache;
 }
 
+/** Reset the in-memory covered-leagues cache (used by the admin "Clear Cache" job). */
+export function resetCoveredLeagues(): void {
+  coveredLeaguesCache = null;
+}
+
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 

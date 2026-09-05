@@ -4,11 +4,15 @@
 // ---------------------------------------------------------------------------
 
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { fetchNext7DaysFixtures } from "@/lib/jobs/midnight-fixtures";
 import { pollLiveMatches } from "@/lib/jobs/live-poll";
 import { clearAllCaches } from "@/lib/cache";
+import { pgMatchesClear } from "@/lib/cache/postgres";
 import { getQuota, clearApiCache } from "@/lib/football/api";
+import { resetCoveredLeagues } from "@/lib/football/service";
+import { clearAllCache as clearLineupCache } from "@/lib/lineup-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,8 +52,29 @@ export async function POST(request: NextRequest) {
         break;
       }
       case "clear": {
+        // 1. Request-scoped API dedup + module-level caches.
         clearApiCache();
-        result = await clearAllCaches();
+        resetCoveredLeagues();
+        clearLineupCache();
+
+        // 2. Cache-aside tiers (memory, Redis, PostgreSQL api_cache).
+        const cacheResult = await clearAllCaches();
+
+        // 3. PostgreSQL `matches` table (live-poll gate source data).
+        const matchesCleared = await pgMatchesClear();
+
+        // 4. Next.js Full Route Cache (ISR) + Data Cache tags.
+        let fullRouteCacheRevalidated = true;
+        try {
+          revalidatePath("/", "layout");
+          revalidateTag("news", { expire: 0 });
+          revalidateTag("lineups", { expire: 0 });
+        } catch (err) {
+          fullRouteCacheRevalidated = false;
+          console.warn("[admin:jobs] revalidation failed:", err);
+        }
+
+        result = { ...cacheResult, matchesCleared, fullRouteCacheRevalidated };
         break;
       }
       default: {

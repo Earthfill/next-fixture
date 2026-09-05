@@ -42,9 +42,9 @@ export async function getYouTubeHighlights(
   });
 
   try {
-    const res = await fetch(`${YOUTUBE_SEARCH_URL}?${params}`, {
-      next: { revalidate: 86400 }, // cache for 24 hours
-    });
+    // NOTE: no Next.js fetch-level caching here — the cache-aside layer
+    // (lib/cache/pages.ts) owns the 24h TTL via Redis/PostgreSQL.
+    const res = await fetch(`${YOUTUBE_SEARCH_URL}?${params}`);
 
     if (!res.ok) {
       console.warn("YouTube API error:", res.status);
