@@ -57,7 +57,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ "league
 
   const highlights = (await Promise.all(
     topMatches.map((m) =>
-      getYouTubeHighlights(m.homeTeam.name, m.awayTeam.name, m.competition, m.date, 3)
+      getYouTubeHighlights(m.homeTeam.name, m.awayTeam.name, m.competition, m.date, 1)
     )
   )).flat();
 
