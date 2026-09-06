@@ -5,7 +5,7 @@
 // additionally caches the combined result in Redis under lineups:<fixtureId>.
 
 import type { SquadPlayerWithRating, PredictedLineup, PlayerSeasonStats } from "@/lib/types";
-import { getTeamInjuries, getTeamSquad } from "@/lib/football-api";
+import { getTeamInjuries, getTeamSquad, getTeamRecentLineups } from "@/lib/football-api";
 import { predictLineup, type PredictLineupInput } from "@/lib/predict-lineup";
 
 export interface LineupServiceResult {
@@ -83,29 +83,59 @@ export async function getPredictedLineup(
   };
 }
 
-// ---------- Core prediction (squad + injuries only; no lineup history) ------
+// ---------- Core prediction --------------------------------------------
+// 1. Query the team's last 3 completed fixtures to see who actually started.
+// 2. Score starters by frequency (recency-weighted) and pick the top 11.
+// 3. Cross-reference the current injury/suspension list and drop them out.
+// 4. Fill any vacant positions from the full squad (highest-rated backup).
 
 async function computePrediction(
   teamId: number,
   season: number
 ): Promise<PredictedLineup | null> {
-  const injuries = await getTeamInjuries(teamId, season);
+  const [injuries, squad, recentLineups] = await Promise.all([
+    getTeamInjuries(teamId, season),
+    getTeamSquad(teamId),
+    getTeamRecentLineups(teamId, 3),
+  ]);
 
-  const confirmedUnavailableIds = new Set(
-    injuries
-      .filter((i) => i.status === "injured" || i.status === "suspended")
-      .map((i) => i.playerId)
-  );
+  // Latest date each player actually started (from recent lineups).
+  const latestStartDateById = new Map<number, string>();
+  for (const lu of recentLineups) {
+    for (const { player } of lu.startXI) {
+      const prev = latestStartDateById.get(player.id);
+      if (!prev || (lu.date && lu.date > prev)) latestStartDateById.set(player.id, lu.date || "");
+    }
+  }
 
-  const squad: SquadPlayerWithRating[] = await getTeamSquad(teamId);
-  if (!squad.length) return null;
+  // Dedupe injuries: keep only the most recent record per player.
+  const latestInjuryById = new Map<number, { status: string; fixtureDate: string }>();
+  for (const i of injuries) {
+    const prev = latestInjuryById.get(i.playerId);
+    if (!prev || i.fixtureDate > prev.fixtureDate) {
+      latestInjuryById.set(i.playerId, { status: i.status, fixtureDate: i.fixtureDate });
+    }
+  }
+
+  const confirmedUnavailableIds = new Set<number>();
+  const possiblyUnavailableIds = new Set<number>();
+  for (const [playerId, inj] of latestInjuryById) {
+    const startedAt = latestStartDateById.get(playerId);
+    // A player who started at/after their injury record has already recovered.
+    if (startedAt !== undefined && startedAt >= inj.fixtureDate) continue;
+    if (inj.status === "injured" || inj.status === "suspended") confirmedUnavailableIds.add(playerId);
+    else if (inj.status === "doubtful") possiblyUnavailableIds.add(playerId);
+  }
+
+  const squadPlayers: SquadPlayerWithRating[] = squad;
+  if (!squadPlayers.length) return null;
 
   const input: PredictLineupInput = {
-    recentLineups: [],
+    recentLineups,
     confirmedUnavailableIds,
-    possiblyUnavailableIds: new Set<number>(),
+    possiblyUnavailableIds,
     playerSeasonStats: new Map<number, PlayerSeasonStats>(),
-    squad,
+    squad: squadPlayers,
   };
 
   return predictLineup(input);

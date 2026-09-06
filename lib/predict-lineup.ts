@@ -147,6 +147,30 @@ function assignGridPositions(players: PredictedPlayer[], formation: string): voi
   }
 }
 
+// Sort the selected XI into their natural on-pitch order using each player's
+// most-common grid from recent lineups: keep position groups together
+// (GK < DEF < MID < FWD), then order left-to-right within a line, and
+// pivot-midfielders before attacking-midfielders. Players with no grid history
+// fall to the end of their group (stable sort preserves their score order).
+function sortByTypicalPosition(
+  players: PredictedPlayer[],
+  mainGridById: Map<number, { row: number; col: number }>
+): void {
+  const groupOrder: Record<string, number> = { G: 0, D: 1, M: 2, F: 3 };
+  players.sort((a, b) => {
+    const ga = groupOrder[a.pos] ?? 9;
+    const gb = groupOrder[b.pos] ?? 9;
+    if (ga !== gb) return ga - gb;
+    const pa = mainGridById.get(a.id);
+    const pb = mainGridById.get(b.id);
+    const ra = pa?.row ?? 99, ca = pa?.col ?? 99;
+    const rb = pb?.row ?? 99, cb = pb?.col ?? 99;
+    if (ra !== rb) return ra - rb;
+    if (ca !== cb) return ca - cb;
+    return 0;
+  });
+}
+
 function buildSubstitutes(
   scored: { id: number; name: string; number: number; pos: string; appearances: number }[],
   squadByPos: Map<string, SquadPlayerWithRating[]>,
@@ -154,35 +178,38 @@ function buildSubstitutes(
   total: number,
   possiblyUnavailable: Set<number>
 ): PredictedPlayer[] {
+  // Realistic bench composition: 1 GK, 2 DEF, 2 MID, 2 FWD (7 total).
+  // Without caps the bench fills up with e.g. 3 goalkeepers + 4 defenders.
   const subs: PredictedPlayer[] = [];
+  const caps: Record<string, number> = { G: 1, D: 2, M: 2, F: 2 };
+
+  const push = (p: { id: number; name: string; number: number }, pos: string, starts: number): boolean => {
+    used.add(p.id);
+    subs.push({ id: p.id, name: p.name, number: p.number, pos, grid: null, recentStarts: starts, recentTotal: total });
+    return true;
+  };
+
   for (const pos of ["G", "D", "M", "F"]) {
-    if (subs.length >= 7) break;
-    // Available players first
-    const available = scored.filter(
-      (p) => getPosGroup(p.pos) === pos && !used.has(p.id) && !subs.some((s) => s.id === p.id) && !possiblyUnavailable.has(p.id)
-    );
-    for (const p of available) {
-      if (subs.length >= 7) break;
-      used.add(p.id);
-      subs.push({ id: p.id, name: p.name, number: p.number, pos, grid: null, recentStarts: p.appearances, recentTotal: total });
+    let added = 0;
+    const cap = caps[pos];
+
+    // 1. Available players with recent lineup history (best signal)
+    for (const p of scored) {
+      if (added >= cap) break;
+      if (getPosGroup(p.pos) !== pos || used.has(p.id) || possiblyUnavailable.has(p.id)) continue;
+      if (push(p, pos, p.appearances)) added++;
     }
-    // Available squad
-    const availableSquad = (squadByPos.get(pos) || []).filter(
-      (p) => !used.has(p.id) && !subs.some((s) => s.id === p.id) && !possiblyUnavailable.has(p.id)
-    );
-    for (const p of availableSquad) {
-      if (subs.length >= 7) break;
-      used.add(p.id);
-      subs.push({ id: p.id, name: p.name, number: p.number, pos, grid: null, recentStarts: 0, recentTotal: total });
+    // 2. Available squad fallback (highest-rated)
+    for (const p of squadByPos.get(pos) || []) {
+      if (added >= cap) break;
+      if (used.has(p.id) || possiblyUnavailable.has(p.id)) continue;
+      if (push(p, pos, 0)) added++;
     }
-    // Possibly unavailable as last resort
-    const possibly = scored.filter(
-      (p) => getPosGroup(p.pos) === pos && !used.has(p.id) && !subs.some((s) => s.id === p.id)
-    );
-    for (const p of possibly) {
-      if (subs.length >= 7) break;
-      used.add(p.id);
-      subs.push({ id: p.id, name: p.name, number: p.number, pos, grid: null, recentStarts: p.appearances, recentTotal: total });
+    // 3. Possibly-unavailable players as last resort
+    for (const p of scored) {
+      if (added >= cap) break;
+      if (getPosGroup(p.pos) !== pos || used.has(p.id)) continue;
+      if (push(p, pos, p.appearances)) added++;
     }
   }
   return subs;
@@ -200,18 +227,19 @@ function determineConfidence(
 // ─── Main prediction function ─────────────────────────────────────────
 
 export function predictLineup(input: PredictLineupInput): PredictedLineup {
-  const { recentLineups, confirmedUnavailableIds, possiblyUnavailableIds, playerSeasonStats, squad } = input;
+  const { recentLineups, confirmedUnavailableIds, possiblyUnavailableIds, squad } = input;
   const formation = pickFormation(recentLineups);
 
   // Track how many signals were detected for confidence degradation
   let dropoffSignals = 0;
-  let staleStatsSignals = 0;
+  const staleStatsSignals = 0; // reserved for future staleness checks (playerSeasonStats)
 
   // Score players from recent lineups
   const playerScores = new Map<number, {
     name: string; number: number; pos: string;
     totalWeight: number; appearances: number; mainPos: string;
     posCounts: Record<string, number>; fixtureIndexes: number[];
+    gridWeights: Record<string, number>;
   }>();
   recentLineups.forEach((lineup, i) => {
     const weight = recencyWeight(i);
@@ -223,15 +251,28 @@ export function predictLineup(input: PredictLineupInput): PredictedLineup {
         existing.fixtureIndexes.push(i);
         existing.posCounts[player.pos] = (existing.posCounts[player.pos] || 0) + 1;
         existing.mainPos = Object.entries(existing.posCounts).sort((a, b) => b[1] - a[1])[0][0];
+        if (player.grid) existing.gridWeights[player.grid] = (existing.gridWeights[player.grid] || 0) + weight;
       } else {
         playerScores.set(player.id, {
           name: player.name, number: player.number, pos: player.pos,
           totalWeight: weight, appearances: 1, mainPos: player.pos,
           posCounts: { [player.pos]: 1 }, fixtureIndexes: [i],
+          gridWeights: player.grid ? { [player.grid]: weight } : {},
         });
       }
     });
   });
+
+  // Track each player's most-common grid (row:col) from recent lineups so we
+  // can place them in their natural left-right / line position on the pitch.
+  const mainGridById = new Map<number, { row: number; col: number }>();
+  for (const [id, d] of playerScores) {
+    const entries = Object.entries(d.gridWeights);
+    if (!entries.length) continue;
+    const best = entries.sort((a, b) => b[1] - a[1])[0][0];
+    const [r, c] = best.split(":").map((n) => parseInt(n, 10));
+    if (!Number.isNaN(r) && !Number.isNaN(c)) mainGridById.set(id, { row: r, col: c });
+  }
 
   // Detect appearance drop-off: regular starters absent from most recent 1-2 matches
   const autoPossiblyUnavailable = new Set<number>();
@@ -303,6 +344,7 @@ export function predictLineup(input: PredictLineupInput): PredictedLineup {
     }
   }
 
+  sortByTypicalPosition(startXI, mainGridById);
   assignGridPositions(startXI, formation);
   const substitutes = buildSubstitutes(scoredPlayers, squadByPos, usedIds, recentLineups.length, combinedPossiblyUnavailable);
   const confidence = determineConfidence(

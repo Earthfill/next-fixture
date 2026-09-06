@@ -48,6 +48,8 @@ export {
   getTeamSquad,
   getFixtureEvents,
   getPlayerStats,
+  getFixtureLineup,
+  getTeamRecentLineups,
 } from "@/lib/football-api";
 
 export {

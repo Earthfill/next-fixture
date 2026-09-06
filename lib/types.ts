@@ -171,8 +171,9 @@ export interface LineupEntry {
 
 export interface ConfirmedLineupFixture {
   fixtureId: number;
+  date?: string;
   formation: string;
-  startXI: { player: { id: number; name: string; number: number; pos: string } }[];
+  startXI: { player: { id: number; name: string; number: number; pos: string; grid?: string | null } }[];
 }
 
 export interface PredictedPlayer {
