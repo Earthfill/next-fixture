@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 import { redisAvailable } from "@/lib/cache/redis";
 import { initPostgres, pgAvailable } from "@/lib/cache/postgres";
+import { hasApi, getQuota } from "@/lib/football/api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +24,10 @@ export async function GET() {
     services: {
       redis: redisAvailable(),
       postgres: pgAvailable(),
+    },
+    api: {
+      configured: hasApi(),
+      quota: getQuota(),
     },
   });
 }

@@ -19,6 +19,7 @@ import TeamNews from "@/components/football/TeamNews";
 import UpcomingFixtures from "@/components/football/UpcomingFixtures";
 
 export const revalidate = 7200; // 2 hours
+export const maxDuration = 60; // Vercel: allow up to 60s for the cold-cache API fetch
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL as string;
 
