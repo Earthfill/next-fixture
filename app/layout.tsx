@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
+import NextTopLoader from "nextjs-toploader";
 import "./globals.css";
 import Header from "@/components/common/Header";
 import Footer from "@/components/common/Footer";
@@ -70,6 +71,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.className}>
       <body className="min-h-screen flex flex-col bg-white text-[#1a1a1a]">
+        <NextTopLoader
+          color="#002b5c"
+          height={3}
+          showSpinner={false}
+          shadow="0 0 10px #002b5c,0 0 5px #002b5c"
+        />
         <Analytics />
         <Header />
         <main className="flex-1 w-full">{children}</main>
