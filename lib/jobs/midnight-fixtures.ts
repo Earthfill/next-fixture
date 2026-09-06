@@ -13,7 +13,7 @@
 // ---------------------------------------------------------------------------
 
 import { fetchFixturesForRange } from "@/lib/football/service";
-import { writeCache } from "@/lib/cache";
+import { clearAllCaches, writeCache } from "@/lib/cache";
 import { fixturesKey, upcomingFixturesKey, UPCOMING_DAYS, TTL } from "@/lib/cache/keys";
 import { upsertMatches } from "@/lib/cache/postgres";
 import { COMPETITION_SLUGS } from "@/lib/football/config";
@@ -29,6 +29,12 @@ export interface MidnightFixturesResult {
 
 export async function fetchNext7DaysFixtures(): Promise<MidnightFixturesResult> {
   const startedAt = Date.now();
+
+  // Invalidate all cache tiers first (mirrors the admin "Clear Cache" action)
+  // so standings, past results, top scorers/assists, previews, etc. are fetched
+  // fresh on the next page visit. Fixtures are re-prefetched right after, so
+  // the homepage stays warm.
+  await clearAllCaches();
 
   // Resolve "today" in the SITE timezone (not the server's UTC clock) so the
   // prefetched window lines up with the dates the homepage and API display.
