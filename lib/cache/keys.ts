@@ -8,7 +8,6 @@ import { siteToday } from "@/lib/dates";
 export const TTL = {
   fixtures: 24 * 60 * 60, // 24h - schedules / leagues
   standings: 24 * 60 * 60, // 24h - league tables
-  live: 24 * 60 * 60, // 24h - live matches (served on-demand)
   preview: 24 * 60 * 60, // 24h - match previews
   lineups: 24 * 60 * 60, // 24h - lineups
   odds: 24 * 60 * 60, // 24h - odds
@@ -31,14 +30,4 @@ export function upcomingFixturesKey(days: number = UPCOMING_DAYS): string {
 
 export function standingsKey(leagueSlug: string): string {
   return `standings:${leagueSlug}`;
-}
-
-export function liveKey(): string {
-  return "live:all";
-}
-
-// Sentinel used to remember "we have seen live matches recently" so the
-// live-poll job can gate its API calls without hitting API-Football.
-export function liveActiveKey(): string {
-  return "live:active";
 }

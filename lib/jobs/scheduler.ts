@@ -3,10 +3,9 @@
 // ---------------------------------------------------------------------------
 //   - 00:00 daily -> prefetch next 7 days of fixtures (midnight-fixtures)
 //
-// Live scores are served on-demand via the cache-aside layer (24h TTL), so
-// there is no background live-poll here. In production the midnight job runs
-// as a Vercel Cron hitting /api/cron/fixtures (see vercel.json); this worker
-// exists for local development and container deployments.
+// In production the midnight job runs as a Vercel Cron hitting
+// /api/cron/fixtures (see vercel.json); this worker exists for local
+// development and container deployments.
 // Start via the standalone worker:  npm run cron   (scripts/cron-worker.ts)
 // ---------------------------------------------------------------------------
 

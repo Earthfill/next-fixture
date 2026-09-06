@@ -25,12 +25,10 @@ export default function FootballMatchCard({ fixture }: FootballMatchCardProps) {
       prefetch={false}
       className="flex items-center gap-3 border-b border-zinc-100 py-3 px-2 hover:bg-zinc-50 transition-colors last:border-b-0 group"
     >
-      {/* Kickoff time / Score / Live indicator */}
+      {/* Kickoff time / Final score */}
       <div className="w-14 shrink-0 text-center">
         <span className="text-xs font-bold text-zinc-600">
-          {fixture.status === "upcoming" ? formatTime(fixture.date) : (
-            fixture.status === "live" ? <span className="text-red-600">LIVE</span> : "FT"
-          )}
+          {fixture.status === "finished" ? "FT" : formatTime(fixture.date)}
         </span>
       </div>
 

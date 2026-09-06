@@ -8,8 +8,6 @@
 import { useState } from "react";
 import {
   RefreshCw,
-  Radio,
-  Zap,
   Trash2,
   Loader2,
   CheckCircle2,
@@ -17,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-type JobKey = "fixtures" | "live" | "all" | "clear";
+type JobKey = "fixtures" | "clear";
 
 interface JobRunnerProps {
   token: string;
@@ -25,8 +23,6 @@ interface JobRunnerProps {
 
 const JOBS: { key: JobKey; label: string; icon: LucideIcon }[] = [
   { key: "fixtures", label: "Prefetch 7-Day Fixtures", icon: RefreshCw },
-  { key: "live", label: "Poll Live Matches", icon: Radio },
-  { key: "all", label: "Run Both", icon: Zap },
   { key: "clear", label: "Clear Cache", icon: Trash2 },
 ];
 

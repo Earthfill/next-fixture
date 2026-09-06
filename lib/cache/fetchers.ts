@@ -7,7 +7,6 @@
 import type { Fixture, LeagueData } from "@/lib/types";
 import {
   fetchFixturesForRange,
-  fetchLiveMatches,
   getLeagueStandings,
 } from "@/lib/football/service";
 
@@ -27,9 +26,4 @@ export function fetchFixtures(date: string, leagueSlug?: string): Promise<Fixtur
 /** Fetch league standings (includes the league + upcoming fixtures). */
 export function fetchStandings(leagueSlug: string): Promise<LeagueData | null> {
   return getLeagueStandings(leagueSlug);
-}
-
-/** Fetch currently-live matches from API-Football. */
-export function fetchLive(): Promise<Fixture[]> {
-  return fetchLiveMatches();
 }

@@ -7,8 +7,6 @@
 // node-cron's timers.
 // ---------------------------------------------------------------------------
 
-import { startScheduler } from "../lib/jobs/scheduler";
-
 function loadEnvFile(path: string): void {
   try {
     const loader = (process as unknown as { loadEnvFile?: (p: string) => void }).loadEnvFile;
@@ -18,14 +16,21 @@ function loadEnvFile(path: string): void {
   }
 }
 
-// Local overrides for development. Harmless no-op when missing.
+// Load env BEFORE importing the scheduler (which transitively imports
+// lib/football/api.ts — that module captures process.env.RAPIDAPI_KEY at
+// module scope).
 loadEnvFile(".env.local");
 
 console.log(`[cron] worker starting — ${new Date().toISOString()} — node ${process.version}`);
 
-try {
+async function main(): Promise<void> {
+  const { startScheduler } = await import("../lib/jobs/scheduler");
   startScheduler();
-} catch (err) {
+}
+
+main().catch((err) => {
   console.error("[cron] failed to start scheduler:", err);
   process.exitCode = 1;
-}
+});
+
+export {};

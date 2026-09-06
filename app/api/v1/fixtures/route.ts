@@ -15,7 +15,7 @@ import { siteToday } from "@/lib/dates";
 import { checkRateLimit } from "@/lib/api/rate-limiter";
 import { getQuota } from "@/lib/football/api";
 
-// Enforce Node runtime + bypass static caching so live data stays fresh.
+// Enforce Node runtime + bypass static caching so data stays fresh.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

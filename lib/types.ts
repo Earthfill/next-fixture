@@ -8,7 +8,7 @@ export interface Venue { name: string; city: string; capacity?: number; }
 export interface Fixture {
   id: string; slug: string; homeTeam: Team; awayTeam: Team;
   competition: string; competitionLogo?: string; venue: Venue;
-  date: string; status: "upcoming" | "live" | "finished";
+  date: string; status: "upcoming" | "finished";
   score?: { home: number; away: number }; matchday?: number;
 }
 

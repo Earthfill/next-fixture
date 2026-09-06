@@ -1,15 +1,13 @@
 // ---------------------------------------------------------------------------
 // POST /api/admin/jobs - manually trigger a background job from the admin UI.
-// Body: { "token": "<ADMIN_SECRET>", "job": "fixtures" | "live" | "all" }
+// Body: { "token": "<ADMIN_SECRET>", "job": "fixtures" | "clear" }
 // ---------------------------------------------------------------------------
 
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { fetchNext7DaysFixtures } from "@/lib/jobs/midnight-fixtures";
-import { pollLiveMatches } from "@/lib/jobs/live-poll";
 import { clearAllCaches } from "@/lib/cache";
-import { pgMatchesClear } from "@/lib/cache/postgres";
 import { getQuota, clearApiCache } from "@/lib/football/api";
 import { resetCoveredLeagues } from "@/lib/football/service";
 import { resetCircuitBreaker } from "@/lib/football/circuit-breaker";
@@ -42,16 +40,6 @@ export async function POST(request: NextRequest) {
         result = await fetchNext7DaysFixtures();
         break;
       }
-      case "live": {
-        result = await pollLiveMatches();
-        break;
-      }
-      case "all": {
-        const fixtures = await fetchNext7DaysFixtures();
-        const live = await pollLiveMatches();
-        result = { fixtures, live };
-        break;
-      }
       case "clear": {
         // 1. Request-scoped API dedup + module-level caches.
         clearApiCache();
@@ -62,10 +50,7 @@ export async function POST(request: NextRequest) {
         // 2. Cache-aside tiers (memory, Redis, PostgreSQL api_cache).
         const cacheResult = await clearAllCaches();
 
-        // 3. PostgreSQL `matches` table (live-poll gate source data).
-        const matchesCleared = await pgMatchesClear();
-
-        // 4. Next.js Full Route Cache (ISR) + Data Cache tags.
+        // 3. Next.js Full Route Cache (ISR) + Data Cache tags.
         let fullRouteCacheRevalidated = true;
         try {
           revalidatePath("/", "layout");
@@ -76,12 +61,12 @@ export async function POST(request: NextRequest) {
           console.warn("[admin:jobs] revalidation failed:", err);
         }
 
-        result = { ...cacheResult, matchesCleared, fullRouteCacheRevalidated };
+        result = { ...cacheResult, fullRouteCacheRevalidated };
         break;
       }
       default: {
         return NextResponse.json(
-          { success: false, error: `Unknown job "${job}". Use "fixtures", "live", or "all".` },
+          { success: false, error: `Unknown job "${job}". Use "fixtures" or "clear".` },
           { status: 400 }
         );
       }

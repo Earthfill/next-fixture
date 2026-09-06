@@ -16,7 +16,7 @@
 
 import { redisClient } from "@/lib/cache/redis";
 
-export type RateScope = "fixtures" | "standings" | "live";
+export type RateScope = "fixtures" | "standings";
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -28,11 +28,10 @@ const MAX = parseInt(process.env.RATE_LIMIT_MAX as string, 10);
 const WINDOW_SECONDS = parseInt(process.env.RATE_LIMIT_WINDOW as string, 10);
 const WINDOW_MS = WINDOW_SECONDS * 1000;
 
-// Per-scope stricter limits (fixtures/live are the most likely to be scraped).
+// Per-scope stricter limits (fixtures are the most likely to be scraped).
 const SCOPE_LIMITS: Record<RateScope, number> = {
   fixtures: Math.min(MAX, 60),
   standings: Math.min(MAX, 60),
-  live: Math.min(MAX, 120),
 };
 
 function clientIp(request: Request): string {

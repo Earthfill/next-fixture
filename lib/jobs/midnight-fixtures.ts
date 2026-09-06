@@ -8,15 +8,13 @@
 //   fixtures:<date>:<league>  → per-league view (matches the fixtures route)
 //   fixtures:upcoming:<d>:<today> → homepage's cached upcoming list (so the
 //                                    page never fires its own API fetch)
-// It also upserts the fixtures into the PostgreSQL `matches` table so the
-// live-poll gate knows which matches are on today.
 // ---------------------------------------------------------------------------
 
 import { fetchFixturesForRange } from "@/lib/football/service";
 import { clearAllCaches, writeCache } from "@/lib/cache";
 import { fixturesKey, upcomingFixturesKey, UPCOMING_DAYS, TTL } from "@/lib/cache/keys";
-import { upsertMatches } from "@/lib/cache/postgres";
 import { COMPETITION_SLUGS } from "@/lib/football/config";
+import { getQuota, hasApi } from "@/lib/football/api";
 import { siteToday, toSiteDate } from "@/lib/dates";
 import type { Fixture } from "@/lib/types";
 
@@ -25,6 +23,8 @@ export interface MidnightFixturesResult {
   fixtureCount: number;
   cacheKeysWritten: number;
   durationMs: number;
+  hasApi: boolean;
+  quotaRemaining: number | null;
 }
 
 export async function fetchNext7DaysFixtures(): Promise<MidnightFixturesResult> {
@@ -45,8 +45,20 @@ export async function fetchNext7DaysFixtures(): Promise<MidnightFixturesResult> 
 
   const fixtures = await fetchFixturesForRange(fromStr, toStr);
   if (!fixtures.length) {
-    console.warn("[cron:midnight] fetched 0 fixtures — check API-Football quota / season window");
-    return { daysFetched: 7, fixtureCount: 0, cacheKeysWritten: 0, durationMs: Date.now() - startedAt };
+    const quota = getQuota();
+    console.warn("[cron:midnight] fetched 0 fixtures", {
+      hasApi: hasApi(),
+      quotaRemaining: quota?.remaining ?? null,
+      window: `${fromStr} → ${toStr}`,
+    });
+    return {
+      daysFetched: 7,
+      fixtureCount: 0,
+      cacheKeysWritten: 0,
+      durationMs: Date.now() - startedAt,
+      hasApi: hasApi(),
+      quotaRemaining: quota?.remaining ?? null,
+    };
   }
 
   const byDate = new Map<string, Fixture[]>();
@@ -94,13 +106,12 @@ export async function fetchNext7DaysFixtures(): Promise<MidnightFixturesResult> 
     console.warn("[cron:midnight] 0 upcoming fixtures after prefetch — homepage will be empty until fixtures exist");
   }
 
-  // Persist the fixtures to PostgreSQL so the live-poll job can gate itself.
-  await upsertMatches(fixtures);
-
   return {
     daysFetched: 7,
     fixtureCount: fixtures.length,
     cacheKeysWritten,
     durationMs: Date.now() - startedAt,
+    hasApi: hasApi(),
+    quotaRemaining: getQuota()?.remaining ?? null,
   };
 }

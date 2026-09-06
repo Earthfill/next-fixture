@@ -26,7 +26,6 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 |-----------|-------------|--------------|
 | `GET /api/v1/fixtures` | Fixture schedules (read-through 24h cache) | `date=YYYY-MM-DD`, `league=<slug>`, `page`, `limit` (≤50) |
 | `GET /api/v1/standings` | League standings (+ upcoming fixtures), 24h cache) | `league=<slug>` (required) |
-| `GET /api/v1/live` | Live matches (24h cache) | `page`, `limit` (≤100) |
 
 Every response includes `meta.source` (`redis` | `postgres` | `memory` | `api`) and
 `meta.quota` — the last observed API-Football rate-limit headers (`limit` / `used` / `remaining`).
@@ -36,23 +35,19 @@ Every response includes `meta.source` (`redis` | `postgres` | `memory` | `api`) 
 ```bash
 curl "http://localhost:3000/api/v1/fixtures?date=2026-09-04&league=premier-league&page=1&limit=10"
 curl "http://localhost:3000/api/v1/standings?league=serie-a"
-curl "http://localhost:3000/api/v1/live"
 ```
 
 ### Scheduled background jobs (cron))
 
 | Command | What it does |
 |---------|--------------|
-| `npm run migrate` | Apply DB migrations once (creates `api_cache` + `matches` tables) |
+| `npm run migrate` | Apply DB migrations once (creates the `api_cache` table) |
 | `npm run cron` | Local/container scheduler (midnight fixtures prefetch; set `DISABLE_CRON=true` to turn off) |
 | `npm run job:fixtures` | Run the 7-day fixture prefetch once (what midnight runs daily) |
-| `npm run job:live` | Run the live-poll once (gated by active matches) |
 
 - **Midnight job** (`0 0 * * *`): fetches the next 7 days of fixtures across all covered
-  leagues into the cache layer and the PostgreSQL `matches` table. In production
-  this runs as a **Vercel Cron** hitting `/api/cron/fixtures` (set `CRON_SECRET` to authorize it).
-- **Live scores** are served on-demand via the cache-aside layer (24h TTL) — there is
-  no scheduled live poll in production.
+  leagues into the cache layer. In production this runs as a **Vercel Cron** hitting
+  `/api/cron/fixtures` (set `CRON_SECRET` to authorize it).
 
 ### Environment variables
 
@@ -62,7 +57,7 @@ See `.env.example` for the full list. Key additions:
 # Redis — hot cache tier (leave empty to fall back to PostgreSQL / in-memory)
 REDIS_URL=redis://localhost:6379
 
-# PostgreSQL — durable cache tier + matches table (run `npm run migrate` to create)
+# PostgreSQL — durable cache tier (run `npm run migrate` to create)
 DATABASE_URL=postgresql://user:pass@localhost:5432/nextfixture
 # PG_POOL_MAX=5        # optional: max pg pool size (default 5)
 
@@ -94,7 +89,6 @@ SITE_TIMEZONE=Africa/Lagos
 |------|-----|
 | Fixture schedules / leagues | 24 hours |
 | Standings | 24 hours |
-| Live matches | 24 hours |
 
 ### Notes
 

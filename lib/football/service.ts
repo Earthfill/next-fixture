@@ -89,8 +89,8 @@ function apiFixtureToFixture(m: any): Fixture | null {
     competitionLogo: COMPETITION_LOGOS[LEAGUE_ID_TO_NAME[l?.id] || ""] || "",
     venue: { name: f?.venue?.name || "", city: f?.venue?.city || "" },
     date: f?.date || "",
-    status: status === "NS" || status === "TBD" ? "upcoming" : status === "LIVE" || status === "1H" || status === "2H" || status === "HT" ? "live" : "finished",
-    score: m.goals?.home !== null ? { home: m.goals.home, away: m.goals.away } : undefined,
+    status: status === "FT" || status === "AET" || status === "PEN" ? "finished" : "upcoming",
+    score: status === "FT" || status === "AET" || status === "PEN" ? { home: m.goals?.home ?? 0, away: m.goals?.away ?? 0 } : undefined,
     matchday: l?.round ? parseInt(l.round.replace(/[^0-9]/g, "")) || 0 : 0,
   };
 }
@@ -257,8 +257,8 @@ export async function getMatchPreviewBySlug(slug: string): Promise<MatchPreview 
         competitionLogo: COMPETITION_LOGOS[l?.name] || l?.logo || "",
         venue: { name: f?.venue?.name || "", city: f?.venue?.city || "" },
         date: f?.date || "",
-        status: f?.status?.short === "FT" || f?.status?.short === "AET" || f?.status?.short === "PEN" ? "finished" : f?.status?.short === "LIVE" || f?.status?.short === "1H" || f?.status?.short === "2H" || f?.status?.short === "HT" || f?.status?.short === "ET" ? "live" : "upcoming",
-        score: f?.status?.short === "FT" || f?.status?.short === "AET" || f?.status?.short === "PEN" || f?.status?.short === "LIVE" || f?.status?.short?.includes("H") ? { home: m.goals?.home ?? 0, away: m.goals?.away ?? 0 } : undefined,
+        status: f?.status?.short === "FT" || f?.status?.short === "AET" || f?.status?.short === "PEN" ? "finished" : "upcoming",
+        score: f?.status?.short === "FT" || f?.status?.short === "AET" || f?.status?.short === "PEN" ? { home: m.goals?.home ?? 0, away: m.goals?.away ?? 0 } : undefined,
       };
       fixtureId = parseInt(f.id);
       homeId = parseInt(t.home.id);
@@ -509,17 +509,4 @@ export async function fetchFixturesForRange(
   }
 
   return allFixtures;
-}
-
-// ─── Live matches fetcher (used by cache layer + live poll job) ────────
-
-export async function fetchLiveMatches(): Promise<Fixture[]> {
-  if (!hasApi()) return [];
-
-  const data = await apiFetch<{ response: any[] }>("/fixtures?live=all");
-  if (!data?.response?.length) return [];
-
-  return data.response
-    .map(apiFixtureToFixture)
-    .filter((f: Fixture | null): f is Fixture => f !== null);
 }

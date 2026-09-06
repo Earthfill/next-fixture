@@ -57,9 +57,7 @@ export default function MatchHeader({ match }: MatchHeaderProps) {
       <div className="flex items-center justify-between border-y border-zinc-200 bg-[#fafafa]">
         <div className="w-14 shrink-0 text-center">
           <span className="text-xs font-bold text-zinc-600">
-            {status === "upcoming" ? null : (
-              status === "live" ? <span className="text-red-600">LIVE</span> : "FT"
-            )}
+            {status === "finished" ? "FT" : null}
           </span>
         </div>
         <div className="flex items-center justify-center gap-6 py-4 flex-1">

@@ -6,7 +6,7 @@
 //   2. PostgreSQL (durable)  → return + repopulate Redis when fresh
 //   3. In-memory (dev tier)  → used ONLY when both Redis + PG are unavailable
 //   4. API-Football          → fetch upstream, write back to all tiers, return
-// Dynamic TTLs (see keys.ts): 24h schedules · 24h standings · 24h live.
+// Dynamic TTLs (see keys.ts): 24h schedules · 24h standings.
 // ---------------------------------------------------------------------------
 
 import { redisGet, redisSet, redisDel, redisClearPrefix } from "./redis";

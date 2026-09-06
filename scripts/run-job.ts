@@ -1,11 +1,7 @@
 // ---------------------------------------------------------------------------
 // One-off job runner — run a single background job manually:
 //   npm run job -- fixtures   → prefetch next 7 days of fixtures
-//   npm run job -- live       → poll live matches (gated by active matches)
 // ---------------------------------------------------------------------------
-
-import { fetchNext7DaysFixtures } from "../lib/jobs/midnight-fixtures";
-import { pollLiveMatches } from "../lib/jobs/live-poll";
 
 function loadEnvFile(path: string): void {
   try {
@@ -18,22 +14,22 @@ function loadEnvFile(path: string): void {
 
 loadEnvFile(".env.local");
 
+// Load env BEFORE importing the job modules: they read process.env.* at module
+// scope (e.g. RAPIDAPI_KEY in lib/football/api.ts), so importing them first
+// would capture undefined values and silently no-op every API call.
 const job = process.argv[2];
 
 async function main(): Promise<void> {
+  const { fetchNext7DaysFixtures } = await import("../lib/jobs/midnight-fixtures");
+
   switch (job) {
     case "fixtures": {
       const result = await fetchNext7DaysFixtures();
       console.log("[job:fixtures]", result);
       break;
     }
-    case "live": {
-      const result = await pollLiveMatches();
-      console.log("[job:live]", result);
-      break;
-    }
     default: {
-      console.error("Usage: npm run job -- fixtures|live");
+      console.error("Usage: npm run job -- fixtures");
       process.exitCode = 1;
       return;
     }
@@ -44,3 +40,5 @@ main().catch((err) => {
   console.error("[job] failed:", err);
   process.exit(1);
 });
+
+export {};
