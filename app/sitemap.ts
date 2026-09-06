@@ -27,6 +27,15 @@ const LEAGUE_SLUGS = [
   "ligue-2",
   "eredivisie",
   "primeira-liga",
+  "champions-league",
+  "europa-league",
+  "conference-league",
+  "fa-cup",
+  "carabao-cup",
+  "copa-del-rey",
+  "dfb-pokal",
+  "coppa-italia",
+  "coupe-de-france",
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

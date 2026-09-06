@@ -4,6 +4,11 @@
 
 // API-Football league IDs
 const LEAGUE_DATA: { id: number; name: string; country: string; countryCode: string; logo?: string }[] = [
+  // 🏆 Europe (UEFA)
+  { id: 2, name: "Champions League", country: "Europe", countryCode: "EU" },
+  { id: 3, name: "Europa League", country: "Europe", countryCode: "EU" },
+  { id: 848, name: "Conference League", country: "Europe", countryCode: "EU" },
+
   // 🏴󠁧󠁢󠁥󠁮󠁧󠁿 England
   { id: 39, name: "Premier League", country: "England", countryCode: "GB" },
   { id: 40, name: "Championship", country: "England", countryCode: "GB" },
@@ -32,6 +37,14 @@ const LEAGUE_DATA: { id: number; name: string; country: string; countryCode: str
 
   // 🇵🇹 Portugal
   { id: 94, name: "Primeira Liga", country: "Portugal", countryCode: "PT" },
+
+  // 🏆 Domestic cups
+  // { id: 45, name: "FA Cup", country: "England", countryCode: "GB" },
+  { id: 48, name: "Carabao Cup", country: "England", countryCode: "GB" },
+  { id: 143, name: "Copa del Rey", country: "Spain", countryCode: "ES" },
+  { id: 81, name: "DFB-Pokal", country: "Germany", countryCode: "DE" },
+  { id: 137, name: "Coppa Italia", country: "Italy", countryCode: "IT" },
+  { id: 66, name: "Coupe de France", country: "France", countryCode: "FR" },
 ];
 
 const LOGO_URLS: Record<string, string> = {
@@ -50,11 +63,27 @@ const LOGO_URLS: Record<string, string> = {
   "Ligue 2": "https://crests.football-data.org/FL2.png",
   "Eredivisie": "https://crests.football-data.org/ED.png",
   "Primeira Liga": "https://crests.football-data.org/PPL.png",
+
+  // UEFA
+  "Champions League": "https://media.api-sports.io/football/leagues/2.png",
+  "Europa League": "https://media.api-sports.io/football/leagues/3.png",
+  "Conference League": "https://media.api-sports.io/football/leagues/848.png",
+  // Domestic cups
+  "FA Cup": "https://media.api-sports.io/football/leagues/45.png",
+  "Carabao Cup": "https://media.api-sports.io/football/leagues/48.png",
+  "Copa del Rey": "https://media.api-sports.io/football/leagues/143.png",
+  "DFB-Pokal": "https://media.api-sports.io/football/leagues/81.png",
+  "Coppa Italia": "https://media.api-sports.io/football/leagues/137.png",
+  "Coupe de France": "https://media.api-sports.io/football/leagues/66.png",
 };
 
 function slugify(name: string): string {
   return name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 }
+
+// Cup/knockout competitions — tracked for fixtures, but NOT shown in the
+// header/footer league links.
+const CUP_LEAGUE_IDS = new Set([2, 3, 848, 45, 48, 143, 81, 137, 66]);
 
 // ─── Build lookup maps ───────────────────────────────────────────────────
 
@@ -77,6 +106,9 @@ for (const l of LEAGUE_DATA) {
   SLUG_TO_LEAGUE_ID[slug] = l.id;
   LEAGUE_ORDER.push(l.name);
 
+  // Cups aren't listed in the header/footer league links.
+  if (CUP_LEAGUE_IDS.has(l.id)) continue;
+
   if (!LEAGUE_BY_COUNTRY[l.country]) {
     LEAGUE_BY_COUNTRY[l.country] = [];
   }
@@ -88,7 +120,7 @@ for (const l of LEAGUE_DATA) {
 }
 
 // Country display order (for the drawer)
-export const COUNTRY_ORDER = ["England", "Scotland", "Spain", "Germany", "Italy", "France", "Netherlands", "Portugal"];
+export const COUNTRY_ORDER = ["Europe", "England", "Scotland", "Spain", "Germany", "Italy", "France", "Netherlands", "Portugal"];
 
 export function generateSlug(id: string, home: string, away: string): string {
   return `${id}--${home.toLowerCase().replace(/\s+/g, "-")}-vs-${away.toLowerCase().replace(/\s+/g, "-")}`;

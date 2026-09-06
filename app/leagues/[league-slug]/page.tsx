@@ -15,6 +15,9 @@ const leagueNames: Record<string, string> = {
   "premier-league": "Premier League", "la-liga": "La Liga",
   "serie-a": "Serie A", "bundesliga": "Bundesliga",
   "ligue-1": "Ligue 1", "eredivisie": "Eredivisie", "primeira-liga": "Primeira Liga",
+  "champions-league": "Champions League", "europa-league": "Europa League", "conference-league": "Conference League",
+  "fa-cup": "FA Cup", "carabao-cup": "Carabao Cup", "copa-del-rey": "Copa del Rey",
+  "dfb-pokal": "DFB-Pokal", "coppa-italia": "Coppa Italia", "coupe-de-france": "Coupe de France",
 };
 
 export const revalidate = 43200; // 12 hours
@@ -43,7 +46,12 @@ export default async function LeaguePage({ params }: { params: Promise<{ "league
   const s = (await params)["league-slug"];
   const data = await getLeagueStandings(s);
 
-  const { league, standings, upcomingFixtures } = data!;
+  if (!data) {
+    notFound();
+  }
+
+  const { league, standings, upcomingFixtures } = data;
+  const hasStandings = standings.length > 0;
   const scorers = await getTopScorers(s, 10);
   const assists = await getTopAssists(s, 10);
   const { articles: news } = await getFootballNews();
@@ -91,35 +99,39 @@ export default async function LeaguePage({ params }: { params: Promise<{ "league
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <h2 className="sm-section-heading">Standings</h2>
-          <table className="sm-table">
-            <thead>
-              <tr>
-                {["#", "Team", "P", "W", "D", "L", "GD", "Pts", "Form"].map(h => <th key={h} className={h === "Team" ? "text-left" : "text-center"}>{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {standings.map(st => (
-                <tr key={st.team.id}>
-                  <td className={`text-left font-bold text-sm ${st.position <= 4 ? 'text-green-600' : 'text-zinc-500'}`}>{st.position}</td>
-                  <td><span className="text-sm font-medium text-zinc-800">{st.team.name}</span></td>
-                  <td className="text-sm text-zinc-600">{st.played}</td>
-                  <td className="text-sm text-zinc-600">{st.won}</td>
-                  <td className="text-sm text-zinc-600">{st.drawn}</td>
-                  <td className="text-sm text-zinc-600">{st.lost}</td>
-                  <td className={`text-sm font-semibold ${st.goalDifference > 0 ? 'text-green-600' : st.goalDifference == 0 ? "text-neutral-600" : 'text-red-600'}`}>{st.goalDifference > 0 ? `+${st.goalDifference}` : st.goalDifference}</td>
-                  <td className="text-sm font-bold text-zinc-800">{st.points}</td>
-                  <td>
-                    <div className="flex justify-start items-center gap-0.5">
-                      {st.form.map((r, i) => (
-                        <span key={i} className={r === 'W' ? 'sm-form-w' : r === 'D' ? 'sm-form-d' : 'sm-form-l'} style={{ width: 18, height: 18, fontSize: 9 }}>{r}</span>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {hasStandings ? (
+            <>
+              <h2 className="sm-section-heading">Standings</h2>
+              <table className="sm-table">
+                <thead>
+                  <tr>
+                    {["#", "Team", "P", "W", "D", "L", "GD", "Pts", "Form"].map(h => <th key={h} className={h === "Team" ? "text-left" : "text-center"}>{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {standings.map(st => (
+                    <tr key={st.team.id}>
+                      <td className={`text-left font-bold text-sm ${st.position <= 4 ? 'text-green-600' : 'text-zinc-500'}`}>{st.position}</td>
+                      <td><span className="text-sm font-medium text-zinc-800">{st.team.name}</span></td>
+                      <td className="text-sm text-zinc-600">{st.played}</td>
+                      <td className="text-sm text-zinc-600">{st.won}</td>
+                      <td className="text-sm text-zinc-600">{st.drawn}</td>
+                      <td className="text-sm text-zinc-600">{st.lost}</td>
+                      <td className={`text-sm font-semibold ${st.goalDifference > 0 ? 'text-green-600' : st.goalDifference == 0 ? "text-neutral-600" : 'text-red-600'}`}>{st.goalDifference > 0 ? `+${st.goalDifference}` : st.goalDifference}</td>
+                      <td className="text-sm font-bold text-zinc-800">{st.points}</td>
+                      <td>
+                        <div className="flex justify-start items-center gap-0.5">
+                          {st.form.map((r, i) => (
+                            <span key={i} className={r === 'W' ? 'sm-form-w' : r === 'D' ? 'sm-form-d' : 'sm-form-l'} style={{ width: 18, height: 18, fontSize: 9 }}>{r}</span>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          ) : null}
 
           {/* Past Results — below standings on large screens */}
           <div className="mt-8 hidden lg:block">

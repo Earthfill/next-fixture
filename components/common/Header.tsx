@@ -55,7 +55,7 @@ export default function Header() {
             <div className="sticky top-0 bg-white border-b border-zinc-200 z-10 flex items-center justify-between px-5 py-4">
               <h2 className="text-sm font-bold text-zinc-800 flex items-center gap-2">
                 <Trophy className="h-4 w-4 text-[#002b5c]" />
-                Leagues
+                Competitions
               </h2>
               <button onClick={() => setDrawerOpen(false)} className="rounded p-1 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-colors cursor-pointer">
                 <X className="h-5 w-5" />

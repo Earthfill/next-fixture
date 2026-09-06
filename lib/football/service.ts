@@ -190,12 +190,18 @@ export async function getLeagueStandings(leagueSlug: string): Promise<LeagueData
   const data = await apiFetch<{ response: { league: { standings: any[][] } }[] }>(
     `/standings?league=${leagueId}&season=${season}`
   );
-  if (!data?.response?.[0]?.league?.standings?.[0]) return null;
+  // API-Football returns one `standings` entry per stage: the league/group
+  // table AND the knockout rounds (Round of 16, Quarter-finals, Final, ...).
+  // Filter those out and take the single league-phase table.
+  const ROUND_RE = /play-?off|knockout|round|quarter|semi|final|qualif/i;
+  const stage = (data?.response?.[0]?.league?.standings ?? []).find(
+    (rows: any[]) => !ROUND_RE.test(String(rows?.[0]?.group ?? ""))
+  );
 
-  const standings: LeagueStanding[] = data.response[0].league.standings[0].map((row: any) => {
+  const standings: LeagueStanding[] = (stage ?? []).map((row: any) => {
     const formStr: string = row.form || "";
-    const form: ("W"|"D"|"L")[] = formStr
-      ? formStr.split("").map((c: string) => c.replace("-", "L") as "W"|"D"|"L")
+    const form: ("W" | "D" | "L")[] = formStr
+      ? formStr.split("").map((c: string) => c.replace("-", "L") as "W" | "D" | "L")
       : [];
     return {
       position: row.rank,

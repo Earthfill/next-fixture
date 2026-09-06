@@ -65,7 +65,7 @@ export default async function AdminPage() {
         <div className="border border-zinc-200 bg-white p-4">
           <div className="flex items-center gap-2 text-sm text-zinc-500 mb-1">
             <BarChart3 className="h-4 w-4 text-amber-600" />
-            <span>Leagues</span>
+            <span>Competitions</span>
           </div>
           <p className="text-2xl font-bold text-zinc-900">{leagues.length}</p>
         </div>
