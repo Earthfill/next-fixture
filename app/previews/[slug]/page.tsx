@@ -148,14 +148,16 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
         <MatchHeader match={fixture} />
 
         {/* 2. Prediction */}
-        <div className="mt-6">
-          <PredictionCard
-            homeTeam={fixture.homeTeam.shortName}
-            awayTeam={fixture.awayTeam.shortName}
-            predictedScore={predictedScore}
-            tip={tip}
-          />
-        </div>
+        {tip !== "No predictions available" && (
+          <div className="mt-6">
+            <PredictionCard
+              homeTeam={fixture.homeTeam.shortName}
+              awayTeam={fixture.awayTeam.shortName}
+              predictedScore={predictedScore}
+              tip={tip}
+            />
+          </div>
+        )}
 
         {/* 3. Win Probability + Ad */}
         <div className="mt-6 grid gap-6 lg:grid-cols-3">
@@ -176,9 +178,11 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
         <hr className="sm-divider" />
 
         {/* 4. Tactical analysis */}
-        <div className="mt-6">
-          <TacticalAnalysis analysis={analysisText} homeTeam={fixture.homeTeam.name} awayTeam={fixture.awayTeam.name} />
-        </div>
+        {tip !== "No predictions available" && (
+          <div className="mt-6">
+            <TacticalAnalysis analysis={analysisText} homeTeam={fixture.homeTeam.name} awayTeam={fixture.awayTeam.name} />
+          </div>
+        )}
 
         <hr className="sm-divider" />
 

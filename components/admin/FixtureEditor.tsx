@@ -227,7 +227,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
                         type="text"
                         value={tip}
                         onChange={(e) => setTip(e.target.value)}
-                        className="mt-1 w-auto ml-4 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
+                        className="mt-1 w-full ml-4 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
                         placeholder="Auto"
                       />
                     </label>
