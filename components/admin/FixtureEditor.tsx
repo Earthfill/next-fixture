@@ -199,7 +199,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
                     </h4>
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       <label className="block text-xs font-medium text-zinc-600">
-                        {homeTeam} goals
+                        Home goals
                         <input
                           type="number"
                           min={0}
@@ -210,7 +210,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
                         />
                       </label>
                       <label className="block text-xs font-medium text-zinc-600">
-                        {awayTeam} goals
+                        Away goals
                         <input
                           type="number"
                           min={0}
@@ -242,7 +242,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
                     </h4>
                     <div className="mt-2 grid grid-cols-3 gap-3">
                       <label className="block text-xs font-medium text-zinc-600">
-                        {homeTeam}
+                        Home
                         <input
                           type="number"
                           min={0}
@@ -266,7 +266,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
                         />
                       </label>
                       <label className="block text-xs font-medium text-zinc-600">
-                        {awayTeam}
+                        Away
                         <input
                           type="number"
                           min={0}
