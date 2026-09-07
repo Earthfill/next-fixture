@@ -14,8 +14,12 @@ import {
   SLUG_TO_LEAGUE_ID, LEAGUE_ORDER, generateSlug, parseSlug, normalizeName,
 } from "@/lib/football/config";
 import { toSiteDate } from "@/lib/dates";
+import { redisGet, redisSet, redisDel } from "@/lib/cache/redis";
 
 // ─── Covered leagues cache (fetched once, cached aggressively) ────────
+
+const COVERED_LEAGUES_KEY = "leagues:covered";
+const COVERED_LEAGUES_TTL = 24 * 60 * 60; // 24h — season/year data changes rarely
 
 interface CoveredLeague {
   id: number;
@@ -34,6 +38,20 @@ async function getCoveredLeagues(): Promise<CoveredLeague[]> {
   if (coveredLeaguesCache) return coveredLeaguesCache;
 
   if (!hasApi()) return [];
+
+  // Serve from Redis when warm. `/leagues?current=true` returns 1000+ leagues
+  // (a very large payload) and, because `coveredLeaguesCache` is in-memory only,
+  // it would otherwise be re-fetched on EVERY cold serverless invocation — the
+  // single biggest source of preview-page latency on production.
+  try {
+    const cached = await redisGet(COVERED_LEAGUES_KEY);
+    if (cached) {
+      coveredLeaguesCache = JSON.parse(cached) as CoveredLeague[];
+      return coveredLeaguesCache;
+    }
+  } catch {
+    // ignore — fall through to a fresh fetch
+  }
 
   // Fetch all leagues with current season info
   const data = await apiFetch<{ response: any[] }>("/leagues?current=true");
@@ -63,12 +81,15 @@ async function getCoveredLeagues(): Promise<CoveredLeague[]> {
       };
     });
 
+  await redisSet(COVERED_LEAGUES_KEY, JSON.stringify(coveredLeaguesCache), COVERED_LEAGUES_TTL).catch(() => false);
+
   return coveredLeaguesCache;
 }
 
-/** Reset the in-memory covered-leagues cache (used by the admin "Clear Cache" job). */
+/** Reset the covered-leagues cache (used by the admin "Clear Cache" job). */
 export function resetCoveredLeagues(): void {
   coveredLeaguesCache = null;
+  redisDel(COVERED_LEAGUES_KEY).catch(() => undefined);
 }
 
 
