@@ -267,7 +267,6 @@ export function generateNlgAnalysis(
     } else {
       p4.push(`This is a closely contested fixture, with the model suggesting a draw is the most likely outcome. The predicted scoreline of ${homeScore}-${awayScore} reflects the evenly matched nature of the contest.`);
     }
-    p4.push(`Confidence in this prediction stands at ${confidence}%.`);
     p4.push(`Kick-off in the ${competition} awaits.`);
   } else {
     p4.push(pick(PREDICTION_OPENERS, seed, 16)(homeTeam, awayTeam, hf, af, h2h));

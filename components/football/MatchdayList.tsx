@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -15,22 +15,78 @@ interface Props {
   matchdays: MatchdayGroup[];
 }
 
+// Persisted per-browser preference so open matchdays survive a refresh
+// (or browser restart) until the user explicitly closes them.
+const STORAGE_KEY = "matchday-open-days";
+
+// Deterministic default state used for BOTH the server render and the client's
+// first render. It must never read localStorage: if SSR and the first client
+// render disagreed, the isOpen CSS classes would mismatch and React would throw
+// a hydration error (and keep the server DOM, i.e. "state resets on refresh").
+function defaultOpenDays(slugs: string[]): Record<string, boolean> {
+  const state: Record<string, boolean> = {};
+  slugs.forEach((slug, index) => {
+    state[slug] = index === 0;
+  });
+  return state;
+}
+
+function readSavedOpenDays(): Record<string, boolean> | null {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") return parsed as Record<string, boolean>;
+    }
+  } catch {
+    // Unavailable or corrupted — falls back to defaults.
+  }
+  return null;
+}
+
+function writeOpenDays(state: Record<string, boolean>): void {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // non-fatal
+  }
+}
+
 function formatDateLabel(iso: string): string {
   const d = new Date(iso + "T12:00:00");
   return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
 export default function MatchdayList({ matchdays }: Props) {
-  const [openDays, setOpenDays] = useState<Record<string, boolean>>(() => {
-    const initialState: Record<string, boolean> = {};
-    matchdays.forEach((matchday, index) => {
-      initialState[matchday.slug] = index === 0;
-    });
-    return initialState;
-  });
+  const slugs = matchdays.map((matchday) => matchday.slug);
+  const slugsKey = slugs.join("|");
+
+  // Server and client agree on this first value — localStorage is applied in
+  // the effect below, so hydration can never see mismatched open/closed attrs.
+  const [openDays, setOpenDays] = useState<Record<string, boolean>>(() =>
+    defaultOpenDays(slugs)
+  );
+
+  // Apply persisted per-browser preferences after hydration. Runs only on the
+  // client, so a saved (open) matchday is restored on refresh without breaking
+  // SSR hydration.
+  useEffect(() => {
+    const list = slugsKey ? slugsKey.split("|") : [];
+    const saved = readSavedOpenDays();
+    const next = defaultOpenDays(list);
+    if (saved) {
+      for (const slug of list) {
+        if (typeof saved[slug] === "boolean") next[slug] = saved[slug];
+      }
+    }
+    setOpenDays(next);
+    writeOpenDays(next);
+  }, [slugsKey]);
 
   const toggleDay = (slug: string) => {
-    setOpenDays((prev) => ({ ...prev, [slug]: !prev[slug] }));
+    const nextOpen = !(openDays[slug] ?? false);
+    setOpenDays((prev) => ({ ...prev, [slug]: nextOpen }));
+    writeOpenDays({ ...openDays, [slug]: nextOpen });
   };
 
   return (

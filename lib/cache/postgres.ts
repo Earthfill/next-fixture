@@ -136,3 +136,112 @@ export async function pgCacheClear(): Promise<boolean> {
     return false;
   }
 }
+
+// ---------- Admin overrides (separate table, never bulk-cleared) ------------
+
+const OVERRIDES_TABLE = "admin_overrides";
+
+export interface AdminOverrideRow {
+  slug: string;
+  predictedScore: { home: number; away: number } | null;
+  tip: string | null;
+  winProbability: { home: number; draw: number; away: number } | null;
+  previewText: string | null;
+  expiresAt: string;
+}
+
+export async function pgOverrideGet(slug: string): Promise<AdminOverrideRow | null> {
+  await initPostgres();
+  if (!pool || !available) return null;
+  try {
+    const res = await pool.query(
+      `SELECT slug, predicted_score, tip, win_probability, preview_text, expires_at
+       FROM "${OVERRIDES_TABLE}"
+       WHERE slug = $1 AND expires_at > now()`,
+      [slug]
+    );
+    const row = res.rows[0];
+    if (!row) return null;
+    return {
+      slug: row.slug,
+      predictedScore: row.predicted_score ?? null,
+      tip: row.tip ?? null,
+      winProbability: row.win_probability ?? null,
+      previewText: row.preview_text ?? null,
+      expiresAt:
+        row.expires_at instanceof Date
+          ? row.expires_at.toISOString()
+          : String(row.expires_at),
+    };
+  } catch (err) {
+    console.warn("[admin:override] pg get failed:", (err as Error).message);
+    return null;
+  }
+}
+
+export async function pgOverrideSet(
+  slug: string,
+  data: {
+    predictedScore: { home: number; away: number } | null;
+    tip: string | null;
+    winProbability: { home: number; draw: number; away: number } | null;
+    previewText: string | null;
+  },
+  expiresAt: string
+): Promise<boolean> {
+  await initPostgres();
+  if (!pool || !available) return false;
+  try {
+    await pool.query(
+      `INSERT INTO "${OVERRIDES_TABLE}"
+         (slug, predicted_score, tip, win_probability, preview_text, expires_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, now())
+       ON CONFLICT (slug)
+       DO UPDATE SET
+         predicted_score = EXCLUDED.predicted_score,
+         tip = EXCLUDED.tip,
+         win_probability = EXCLUDED.win_probability,
+         preview_text = EXCLUDED.preview_text,
+         expires_at = EXCLUDED.expires_at,
+         updated_at = now()`,
+      [
+        slug,
+        data.predictedScore ? JSON.stringify(data.predictedScore) : null,
+        data.tip,
+        data.winProbability ? JSON.stringify(data.winProbability) : null,
+        data.previewText,
+        expiresAt,
+      ]
+    );
+    return true;
+  } catch (err) {
+    console.warn("[admin:override] pg set failed:", (err as Error).message);
+    return false;
+  }
+}
+
+export async function pgOverrideDelete(slug: string): Promise<void> {
+  await initPostgres();
+  if (!pool || !available) return;
+  try {
+    await pool.query(`DELETE FROM "${OVERRIDES_TABLE}" WHERE slug = $1`, [slug]);
+  } catch {
+    // non-fatal
+  }
+}
+
+/** Return the subset of slugs that still have a valid (non-expired) override. */
+export async function pgOverrideList(slugs: string[]): Promise<string[]> {
+  await initPostgres();
+  if (!pool || !available || slugs.length === 0) return [];
+  try {
+    const res = await pool.query(
+      `SELECT slug FROM "${OVERRIDES_TABLE}"
+       WHERE slug = ANY($1) AND expires_at > now()`,
+      [slugs]
+    );
+    return res.rows.map((r) => r.slug);
+  } catch {
+    return [];
+  }
+}

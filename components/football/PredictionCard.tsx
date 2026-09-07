@@ -21,9 +21,6 @@ export default function PredictionCard({ homeTeam, awayTeam, predictedScore, tip
         <p className="sm-prediction-score">
           {homeTeam} {predictedScore.home} – {predictedScore.away} {awayTeam}
         </p>
-        {/* <p className="text-xs text-zinc-500 mt-2">
-          Confidence: <span className="font-bold text-zinc-700">{confidence}%</span>
-        </p> */}
       </div>
 
       {/* Tip */}

@@ -14,7 +14,7 @@
 // NOTE: server-only module. Client components keep using @/lib/sports-api
 // (this module pulls in ioredis/pg, which must never enter the client bundle).
 
-import { cacheAside } from "@/lib/cache";
+import { cacheAside, writeCache } from "@/lib/cache";
 import { standingsKey, upcomingFixturesKey, UPCOMING_DAYS, TTL } from "@/lib/cache/keys";
 import type {
   Fixture, LeagueData, MatchdayGroup, MatchPreview, TopScorer, LineupEntry, Team, HighlightVideo,
@@ -43,6 +43,21 @@ export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
     () => getUpcomingFixturesRaw(days).then((r) => r ?? [])
   );
   return data ?? [];
+}
+
+/**
+ * Fresh upcoming fixtures, bypassing the cache-aside layer (admin use).
+ * Fetches straight from the API so the admin table always reflects reality
+ * (newly added fixtures, finished matches dropping off, status changes).
+ * The fresh list is written back into the shared cache (when non-empty) so the
+ * public site serves the same updated data instead of a stale 24h snapshot.
+ */
+export async function getUpcomingFixturesFresh(): Promise<Fixture[]> {
+  const fixtures = await getUpcomingFixturesRaw(UPCOMING_DAYS).then((r) => r ?? []);
+  if (fixtures.length > 0) {
+    await writeCache(upcomingFixturesKey(UPCOMING_DAYS), fixtures, TTL.fixtures);
+  }
+  return fixtures;
 }
 
 /**

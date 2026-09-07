@@ -12,6 +12,7 @@ import OddsWidget from "@/components/football/OddsWidget";
 import { getFixtureLineups, getTeamUpcomingFixtures, getLeagueStandings, getFixtureOdds } from "@/lib/cache/pages";
 import { computePrediction } from "@/lib/football/win-probability";
 import { generateNlgAnalysis } from "@/lib/football/nlg-analysis";
+import { getAdminOverride } from "@/lib/admin-overrides";
 // import AdSlot from "@/components/common/AdSlot";
 import PredictionCard from "@/components/football/PredictionCard";
 import WinProbability from "@/components/football/WinProbability";
@@ -58,6 +59,10 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
 
   const { fixture, homeForm, awayForm, headToHead, homeNews, awayNews, prediction } = preview;
 
+  // Admin override (scoreline / tip / win-probability / preview text) — wins
+  // over auto-computed values until the match date elapses.
+  const override = await getAdminOverride(slug);
+
   const compSlug = fixture.competition.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
   const homeId = parseInt(fixture.homeTeam.id);
   const awayId = parseInt(fixture.awayTeam.id);
@@ -96,28 +101,32 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
     odds: odds ?? null,
   });
 
+  // Effective values: admin override wins, otherwise API prediction, otherwise
+  // the Poisson-computed result.
+  const predictedScore = override?.predictedScore
+    ?? (prediction?.predictedScore ?? { home: predictionResult.homeScore, away: predictionResult.awayScore });
+  const tip = override?.tip ?? prediction?.tip ?? predictionResult.tip;
+  const homeWin = override?.winProbability?.home ?? predictionResult.homeWin;
+  const draw = override?.winProbability?.draw ?? predictionResult.draw;
+  const awayWin = override?.winProbability?.away ?? predictionResult.awayWin;
+
   // Regenerate analysis text aligned with the actual prediction data
   const alignedAnalysis = generateNlgAnalysis(
     fixture.homeTeam.name, fixture.awayTeam.name, fixture.competition,
     homeForm, awayForm, headToHead,
-    prediction ? {
-      tip: prediction.tip,
-      homeScore: prediction.predictedScore.home,
-      awayScore: prediction.predictedScore.away,
-      confidence: prediction.confidence,
-      homeWin: prediction.winProbability.home,
-      draw: prediction.winProbability.draw,
-      awayWin: prediction.winProbability.away,
-    } : {
-      tip: predictionResult.tip,
-      homeScore: predictionResult.homeScore,
-      awayScore: predictionResult.awayScore,
-      confidence: predictionResult.confidence,
-      homeWin: predictionResult.homeWin,
-      draw: predictionResult.draw,
-      awayWin: predictionResult.awayWin,
+    {
+      tip,
+      homeScore: predictedScore.home,
+      awayScore: predictedScore.away,
+      confidence: prediction?.confidence ?? predictionResult.confidence,
+      homeWin,
+      draw,
+      awayWin,
     }
   );
+
+  // Admin-written preview text replaces the generated analysis entirely.
+  const analysisText = override?.previewText?.trim() || alignedAnalysis;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -143,8 +152,8 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
           <PredictionCard
             homeTeam={fixture.homeTeam.shortName}
             awayTeam={fixture.awayTeam.shortName}
-            predictedScore={prediction?.predictedScore ?? { home: predictionResult.homeScore, away: predictionResult.awayScore }}
-            tip={prediction?.tip ?? predictionResult.tip}
+            predictedScore={predictedScore}
+            tip={tip}
           />
         </div>
 
@@ -152,9 +161,9 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
         <div className="mt-6 grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <WinProbability
-              homeWin={predictionResult.homeWin}
-              draw={predictionResult.draw}
-              awayWin={predictionResult.awayWin}
+              homeWin={homeWin}
+              draw={draw}
+              awayWin={awayWin}
               homeTeam={fixture.homeTeam.shortName}
               awayTeam={fixture.awayTeam.shortName}
             />
@@ -168,7 +177,7 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
 
         {/* 4. Tactical analysis */}
         <div className="mt-6">
-          <TacticalAnalysis analysis={alignedAnalysis} homeTeam={fixture.homeTeam.name} awayTeam={fixture.awayTeam.name} />
+          <TacticalAnalysis analysis={analysisText} homeTeam={fixture.homeTeam.name} awayTeam={fixture.awayTeam.name} />
         </div>
 
         <hr className="sm-divider" />
