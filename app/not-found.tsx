@@ -2,14 +2,16 @@
 // app/not-found.tsx — Global 404 page
 // ---------------------------------------------------------------------------
 
+"use client";
+
 import Link from "next/link";
-import { Home, ArrowLeft } from "lucide-react";
+import { Home, ArrowLeft, AlertTriangle } from "lucide-react";
 
 export default function NotFound() {
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-3xl flex-col items-center justify-center px-4 py-16 text-center">
-      <div className="text-8xl font-bold tracking-tight text-[#002b5c]">
-        404
+      <div className="flex items-center gap-3 text-8xl font-bold tracking-tight text-[#002b5c]">
+        <AlertTriangle size={80} color="#FFD230" /> 404
       </div>
 
       <h1 className="sm-heading-lg mt-6 mb-2">
