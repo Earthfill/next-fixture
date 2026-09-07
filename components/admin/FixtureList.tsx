@@ -239,7 +239,6 @@ export default function FixtureList({ fixtures, overriddenSlugs, token }: Fixtur
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm font-medium text-zinc-800">{f.homeTeam.name}</td>
-                    <td className="px-4 py-3 text-center text-xs font-semibold text-zinc-400">vs</td>
                     <td className="px-4 py-3 text-sm font-medium text-zinc-800">{f.awayTeam.name}</td>
                     <td className="px-4 py-3 text-center">
                       {edited ? (
@@ -256,7 +255,7 @@ export default function FixtureList({ fixtures, overriddenSlugs, token }: Fixtur
                       <Link
                         href={`/previews/${f.slug}`}
                         prefetch={false}
-                        className="mr-2 inline-flex items-center gap-1 text-xs font-medium text-[#002b5c] hover:underline"
+                        className="mr-4 inline-flex items-center gap-1 text-xs font-medium text-[#002b5c] hover:underline"
                       >
                         <ExternalLink className="h-3 w-3" /> View
                       </Link>

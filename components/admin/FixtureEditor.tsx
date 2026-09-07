@@ -161,7 +161,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
             {/* Header */}
             <div className="flex items-start justify-between gap-4 border-b border-zinc-200 bg-zinc-50 px-5 py-4">
               <div className="min-w-0">
-                <h3 className="text-base font-bold leading-tight text-zinc-900">
+                <h3 className="text-base text-start font-bold leading-tight text-zinc-900">
                   {homeTeam} <span className="font-normal text-zinc-400">vs</span> {awayTeam}
                 </h3>
                 <p className="mt-1 text-xs text-zinc-500">
@@ -193,11 +193,11 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
               ) : (
                 <>
                   {/* Prediction */}
-                  <section>
+                  <section className="text-start">
                     <h4 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
                       Prediction
                     </h4>
-                    <div className="mt-2 grid grid-cols-2 gap-3">
+                    <div className="mt-2 grid grid-cols-2 gap-2">
                       <label className="block text-xs font-medium text-zinc-600">
                         {homeTeam} goals
                         <input
@@ -205,7 +205,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
                           min={0}
                           value={home}
                           onChange={(e) => setHome(e.target.value)}
-                          className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
+                          className="mt-1 w-20 ml-4 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
                           placeholder="Auto"
                         />
                       </label>
@@ -216,7 +216,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
                           min={0}
                           value={away}
                           onChange={(e) => setAway(e.target.value)}
-                          className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
+                          className="mt-1 w-20 ml-4 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
                           placeholder="Auto"
                         />
                       </label>
@@ -227,7 +227,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
                         type="text"
                         value={tip}
                         onChange={(e) => setTip(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
+                        className="mt-1 w-auto ml-4 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
                         placeholder="Auto"
                       />
                     </label>
@@ -237,7 +237,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
 
                   {/* Win probability */}
                   <section>
-                    <h4 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                    <h4 className="text-[11px] text-start font-semibold uppercase tracking-wider text-zinc-500">
                       Win Probability (%)
                     </h4>
                     <div className="mt-2 grid grid-cols-3 gap-3">
@@ -249,7 +249,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
                           max={100}
                           value={homeWin}
                           onChange={(e) => setHomeWin(e.target.value)}
-                          className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
+                          className="mt-1 w-20 ml-4 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
                           placeholder="Auto"
                         />
                       </label>
@@ -261,7 +261,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
                           max={100}
                           value={draw}
                           onChange={(e) => setDraw(e.target.value)}
-                          className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
+                          className="mt-1 w-20 ml-4 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
                           placeholder="Auto"
                         />
                       </label>
@@ -273,7 +273,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
                           max={100}
                           value={awayWin}
                           onChange={(e) => setAwayWin(e.target.value)}
-                          className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
+                          className="mt-1 w-20 ml-4 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
                           placeholder="Auto"
                         />
                       </label>
@@ -284,7 +284,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
 
                   {/* Match preview text */}
                   <section>
-                    <h4 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                    <h4 className="text-[11px] text-start font-semibold uppercase tracking-wider text-zinc-500">
                       Match Preview Text
                     </h4>
                     <textarea
