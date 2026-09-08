@@ -44,7 +44,7 @@ function analyzeForm(form: TeamForm): FormSummary {
   const losses = results.filter((r) => r === "L").length;
   const points = wins * 3 + draws;
   let streakLength = 1;
-  let streakType: "W" | "D" | "L" | null = results[results.length - 1];
+  const streakType: "W" | "D" | "L" | null = results[results.length - 1];
   for (let i = results.length - 2; i >= 0; i--) {
     if (results[i] === streakType) streakLength++; else break;
   }
@@ -92,29 +92,44 @@ type H2HGoalSentence = (h: H2HSummary) => string;
 type TacticalSentence = (home: string, away: string, hf: FormSummary, af: FormSummary) => string;
 type TacticalFavSentence = (fav: string, underdog: string) => string;
 type PredictionSentence = (home: string, away: string, hf: FormSummary, af: FormSummary, h2h: H2HSummary) => string;
+type PredictionCloserSentence = (comp: string) => string;
 
 const FORM_OPENERS: FormSentence[] = [
   (t, f) => `${t} come into this on the back of ${f.isStreak && f.streakType === "W" ? `an impressive ${f.streakLength}-match winning run` : f.isStreak && f.streakType === "L" ? `a difficult run of ${f.streakLength} consecutive defeats` : f.isStreak && f.streakType === "D" ? `a steady run of ${f.streakLength} draws` : `a mixed run of form`}, having taken ${f.points} points from their last ${f.wins + f.draws + f.losses} matches.`,
   (t, f) => `${t} are ${f.label === "flying" ? "in impressive form" : f.label === "strong" ? "enjoying a solid spell" : f.label === "poor" ? "going through a rough patch" : f.label === "struggling" ? "finding things difficult" : "experiencing a mixed run"} with ${f.wins} wins, ${f.draws} draws and ${f.losses} defeats from their last ${f.wins + f.draws + f.losses} outings.`,
   (t, f) => `Recent form suggests ${t} are ${f.label === "flying" ? "in red-hot form" : f.label === "strong" ? "on a positive trajectory" : f.label === "poor" ? "in a worrying slump" : f.label === "struggling" ? "struggling for consistency" : "hard to predict right now"} — ${f.wins} wins, ${f.draws} draws and ${f.losses} losses in their last ${f.wins + f.draws + f.losses}.`,
   (t, f) => `${t} head into this fixture ${f.label === "flying" ? "brimming with confidence" : f.label === "strong" ? "in decent shape" : f.label === "poor" ? "low on confidence" : f.label === "struggling" ? "desperate for a turnaround" : "with mixed emotions"} after collecting ${f.points} points from a possible ${(f.wins + f.draws + f.losses) * 3} in their last ${f.wins + f.draws + f.losses}.`,
+  (t, f) => `${t} arrive at this fixture ${f.label === "flying" ? "with real wind in their sails" : f.label === "strong" ? "on the back of a productive spell" : f.label === "poor" ? "searching for answers after a difficult run" : f.label === "struggling" ? "hoping a change of opponent sparks a revival" : "looking to turn decent patches into consistency"}, having picked up ${f.points} points from their last ${f.wins + f.draws + f.losses} games.`,
+  (t, f) => `The numbers tell a clear story for ${t}: ${f.wins} wins, ${f.draws} draws and ${f.losses} losses in their last ${f.wins + f.draws + f.losses} outings, worth ${f.points} points — ${f.label === "flying" ? "an excellent return" : f.label === "strong" ? "a solid return" : f.label === "poor" ? "a worrying return" : f.label === "struggling" ? "a concerning return" : "a middling return"}.`,
+  (t, f) => `${t} will approach this game ${f.label === "flying" ? "with the belief of a side that can beat anyone" : f.label === "strong" ? "with quiet confidence" : f.label === "poor" ? "with confidence levels at a low ebb" : f.label === "struggling" ? "with a point to prove" : "with cautious optimism"}, after taking ${f.points} points from a possible ${(f.wins + f.draws + f.losses) * 3} in their last ${f.wins + f.draws + f.losses}.`,
 ];
 
 const FORM_GOAL_ATTACK: FormSentence[] = [
   (t, f) => `They have scored ${f.avgScored >= 1.5 ? "freely" : f.avgScored >= 1 ? "at a steady rate" : "with difficulty"} averaging ${f.avgScored.toFixed(1)} goals per game, while conceding ${f.avgConceded.toFixed(1)}.`,
   (t, f) => `With ${f.avgScored >= 1.5 ? `${f.scored} goals in their last ${f.wins + f.draws + f.losses}` : `${f.scored} goals from ${f.wins + f.draws + f.losses} matches`}, their attack has been ${f.avgScored >= 1.5 ? "a real threat" : "somewhat inconsistent"}, while defensively they have conceded ${f.avgConceded >= 1.5 ? "more than they would like" : "relatively few"} (${f.avgConceded.toFixed(1)} per game).`,
   (t, f) => `Their attacking output stands at ${f.scored} goals in ${f.wins + f.draws + f.losses} matches${f.cleanSheets > 0 ? `, and they have kept ${f.cleanSheets} clean sheet${f.cleanSheets > 1 ? "s" : ""} in that period` : ""}.`,
+  (t, f) => `${f.scored} goals scored and ${f.conceded} conceded in their last ${f.wins + f.draws + f.losses} appearances point to a side that ${f.avgScored >= 1.5 ? "carries a genuine goal threat" : f.avgScored >= 1 ? "can generally find a way to score" : "often struggles to break teams down"}.`,
+  (t, f) => `In front of goal, ${t} have ${f.avgScored >= 1.5 ? "been clinical and ruthless" : f.avgScored >= 1 ? "been dependable rather than dazzling" : "found chances hard to convert"}, netting ${f.scored} times while conceding ${f.conceded}.`,
+  (t, f) => `Averaging ${f.avgScored.toFixed(1)} goals scored per game, ${t}'s attack has ${f.avgScored >= 1.5 ? "misfired rarely" : f.avgScored >= 1 ? "done enough to compete" : "produced too little"}; at the other end, ${f.avgConceded.toFixed(1)} goals per game have gone in.`,
 ];
 
 const STREAK_SENTENCES: FormSentence[] = [
   (t, f) => `Notably, ${t} are on a ${f.streakLength}-match ${f.streakType === "W" ? "winning" : f.streakType === "L" ? "losing" : "unbeaten"} streak, which ${f.streakType === "W" ? "will fill them with belief" : "they will be desperate to end"} heading into this contest.`,
   (t, f) => `The momentum is ${f.streakType === "W" ? "firmly with" : "against"} ${t} right now — they have ${f.streakType === "W" ? "won" : f.streakType === "L" ? "lost" : "drawn"} their last ${f.streakLength} matches.`,
   (t, f) => `${t}'s recent run of ${f.streakLength} ${f.streakType === "W" ? "victories" : f.streakType === "L" ? "defeats" : "draws"} ${f.streakType === "W" ? "highlights their current momentum" : "will be a concern for the management"}.`,
+  (t, f) => `${f.streakType === "W" ? `${t} will be riding a wave of confidence on their current ${f.streakLength}-game surge` : f.streakType === "L" ? `Stopping the rot of ${f.streakLength} straight defeats will be top of ${t}'s priority list` : `${t} will be eager to turn their run of ${f.streakLength} draws into something more tangible`}.`,
+  (t, f) => `The recent sequence — ${f.streakType === "W" ? `${f.streakLength} consecutive wins` : f.streakType === "L" ? `${f.streakLength} losses on the trot` : `${f.streakLength} straight draws`} — ${f.streakType === "W" ? "gives this camp real momentum" : f.streakType === "L" ? "leaves this camp searching for solutions" : "underlines how finely balanced they currently are"}.`,
 ];
 
 const FORM_GOAL_DEFENCE: FormSentence[] = [
   (t, f) => `Defensively, they have ${f.cleanSheets >= 2 ? "looked solid with multiple clean sheets" : "had mixed results"}, keeping ${f.cleanSheets} clean sheet${f.cleanSheets !== 1 ? "s" : ""} in their last ${f.wins + f.draws + f.losses}.`,
   (t, f) => `At the back, they have been ${f.cleanSheets >= 2 ? "difficult to break down" : "showing signs of vulnerability"}, conceding ${f.avgConceded.toFixed(1)} goals per game on average.`,
+  (t, f) => `Behind the ball, ${t} have conceded ${f.conceded} goals in ${f.wins + f.draws + f.losses} matches, with ${f.cleanSheets} clean sheet${f.cleanSheets !== 1 ? "s" : ""} along the way.`,
+  (t, f) => `The defensive numbers for ${t} read ${f.avgConceded.toFixed(1)} goals conceded per game — ${f.cleanSheets >= 2 ? "an encouraging level of stability" : "an area that could prove costly against dangerous attackers"}.`,
+];
+const FORM_FAILED_TO_SCORE: FormSentence[] = [
+  (t, f) => `Worryingly for ${t}, they have drawn blanks in ${f.failedToScore} of their last ${f.wins + f.draws + f.losses} matches, a return that will need to improve against organised opposition.`,
+  (t, f) => `Goalless afternoons have been a recurring issue for ${t}, who have failed to score ${f.failedToScore} times recently — breaking that habit will be crucial.`,
 ];
 const FORM_TRANSITION = [
   (t: string) => `Turning to ${t}, their recent form paints a contrasting picture.`,
@@ -122,6 +137,9 @@ const FORM_TRANSITION = [
   (t: string) => `For ${t}, the picture is quite different.`,
   (t: string) => `As for ${t}, their recent results tell an interesting tale.`,
   (t: string) => `On the other side, ${t} have had a contrasting run of results.`,
+  (t: string) => `Switching attention to ${t}, their form tells a rather different story.`,
+  (t: string) => `${t} arrive with their own narrative, shaped by a set of results that pulls in another direction.`,
+  (t: string) => `Now to ${t}, whose recent form offers a separate set of clues about how this one could play out.`,
 ];
 
 const H2H_OPENERS = [
@@ -138,41 +156,62 @@ const H2H_OPENERS = [
     if (h.recentMeetings === 0) return "These teams have not crossed paths recently, making this something of a fresh encounter.";
     return `History between these two shows ${h.homeWins} home wins, ${h.awayWins} away wins and ${h.draws} draws from ${h.recentMeetings} meetings.`;
   },
+  (h: H2HSummary, home: string, away: string) => {
+    if (h.recentMeetings === 0) return "Finding historical comparisons between these sides is tricky, as they have not met recently.";
+    if (h.isOneSided) return `The head-to-head ledger leans heavily towards ${h.dominantSide === "home" ? home : away}, who have won ${h.dominantWins} of the last ${h.recentMeetings} meetings.`;
+    return `The recent head-to-head between ${home} and ${away} has been a competitive affair, with wins and draws traded in fairly equal measure.`;
+  },
+  (h: H2HSummary, home: string, away: string) => {
+    if (h.recentMeetings === 0) return "With no recent meetings on record, this fixture carries an element of the unknown.";
+    return `Over their last ${h.recentMeetings} meetings, ${h.homeWins} have ended in home victories, ${h.awayWins} in away victories and ${h.draws} in draws.`;
+  },
 ];
 
 const H2H_GOALS = [
   (h: H2HSummary) => `Goals have been ${h.avgGoals >= 3 ? "plentiful in these fixtures" : h.avgGoals >= 2 ? "at a reasonable level" : "hard to come by"}, with an average of ${h.avgGoals.toFixed(1)} per game.`,
   (h: H2HSummary) => `These meetings have ${h.avgGoals >= 3 ? "tended to produce plenty of goals" : h.avgGoals >= 2 ? "generally delivered a steady flow of goals" : "often been tight affairs"}, averaging ${h.avgGoals.toFixed(1)} goals per match.`,
   (h: H2HSummary) => `With ${h.totalGoals} goals in ${h.recentMeetings} games (${h.avgGoals.toFixed(1)} per match), the fixture has ${h.avgGoals >= 3 ? "a reputation for entertainment" : "tended to be more measured"}.`,
+  (h: H2HSummary) => `The fixture has averaged ${h.avgGoals.toFixed(1)} goals per meeting, with ${h.avgGoals >= 3 ? "goals rarely in short supply" : h.avgGoals >= 2 ? "a decent amount of goalmouth action" : "scoring at a genuine premium"}.`,
+  (h: H2HSummary) => `${h.recentMeetings} recent meetings have produced ${h.totalGoals} goals in total, underlining that this tie tends to be ${h.avgGoals >= 3 ? "an open, adventurous affair" : h.avgGoals >= 2 ? "a reasonably lively fixture" : "a tight, cagey contest"}.`,
 ];
 const TACTICAL_HIGH_SCORING = [
   (h: string, a: string, hf: FormSummary) => `With both teams averaging over ${Math.max(hf.avgScored, 0).toFixed(1)} goals per game recently, this fixture has the hallmarks of an open, entertaining contest. The attacking quality on both sides suggests we could see goals at both ends.`,
   (h: string, a: string) => `Given the attacking firepower on display, this could be a high-scoring affair. Both sides have shown they can find the net regularly, and the defensive records suggest opportunities will come.`,
   (h: string, a: string) => `The statistics point towards an open game here. Both teams have been involved in matches with plenty of goalmouth action recently, and the tactical setup suggests a similar pattern could emerge.`,
+  (h: string, a: string) => `Expect attacking ambition here: both sides have regularly found the net, and each will back themselves to outscore the other. It could take several goals to settle this fixture.`,
+  (h: string, a: string) => `The form figures point toward goals. With both teams averaging above a goal a game, neither defence looks built to silence the other's attack — a lively, multi-goal afternoon feels on the cards.`,
 ];
 
 const TACTICAL_DEFENSIVE = [
   (h: string, a: string) => `Both defences have been relatively solid recently, which could make this a tight contest where chances are at a premium. The midfield battle will likely be decisive in such a close encounter.`,
   (h: string, a: string) => `With both teams showing defensive organisation recently, this could be a game where patience and discipline are rewarded. Set pieces and individual moments may prove decisive.`,
   (h: string, a: string) => `This has the feel of a closely contested match where goals may be hard to come by. The team that can break the deadlock will be in a strong position to control the game.`,
+  (h: string, a: string) => `Low-scoring games have been something of a theme for both sides recently, and this meeting could follow suit. Keeping it tight for sixty minutes could leave one moment of quality to decide it.`,
+  (h: string, a: string) => `With both teams conceding precious little of late, this promises to be a tactical chess match in which the first goal — if it comes — could carry enormous weight.`,
 ];
 
 const TACTICAL_MIXED = [
   (h: string, a: string, hf: FormSummary, af: FormSummary) => `${hf.avgScored >= 1.5 ? h : a} have been the more prolific side in front of goal recently, but ${hf.avgConceded <= 1 ? h : a} boast the stronger defensive record. The contrasting styles could make for a fascinating tactical battle.`,
   (h: string, a: string, hf: FormSummary, af: FormSummary) => `The key battle could be between ${h}'s ${hf.avgScored >= 1.5 ? "attacking threat" : "defensive resilience"} and ${a}'s ${af.avgScored >= 1.5 ? "attacking threat" : "defensive resilience"}. Whichever side imposes their style early could gain a crucial advantage.`,
   (h: string, a: string) => `Tactically, this promises to be an intriguing contest. The midfield battle will be crucial, and the team that can control the tempo of the game will likely emerge victorious.`,
+  (h: string, a: string, hf: FormSummary, af: FormSummary) => `There is a clear stylistic mismatch at play: ${hf.avgScored >= 1.5 ? `${h} like to attack with purpose` : `${h} prioritise defensive security`}, while ${af.avgScored >= 1.5 ? `${a} carry their own attacking threat` : `${a} lean on defensive organisation`}. How that clash resolves could decide everything.`,
+  (h: string, a: string, hf: FormSummary) => `One side arrives in better attacking form, the other may need to absorb pressure and strike on the break. The opening quarter-hour could hint at how this tactical battle will unfold.`,
 ];
 
 const TACTICAL_FAVOURITE = [
   (f: string, u: string) => `${f} will look to assert their authority early and put pressure on ${u}'s defence. If they can convert their dominance into goals, it could be a long afternoon for the visitors.`,
   (f: string, u: string) => `${f} will be expected to take the initiative, but ${u} have shown they can be dangerous on the counter. The dynamic between attack and defence will shape the narrative.`,
   (f: string, u: string) => `As the stronger side on paper, ${f} will want to dictate proceedings. However, ${u} will be well aware of the threat they pose and may look to frustrate and hit on the break.`,
+  (f: string, u: string) => `${f} will sense an opportunity to stamp their authority on this game early, knowing that an early goal could force ${u} to take risks they would rather avoid.`,
+  (f: string, u: string) => `The onus will be on ${f} to make the running, while ${u} can play without the weight of expectation. Patience will be key for the favourites against a side set up to frustrate.`,
 ];
 
 const TACTICAL_EVEN = [
   (h: string, a: string) => `This is a difficult one to call, with both sides evenly matched on recent form. The game could hinge on a single moment of quality or a defensive lapse.`,
   (h: string, a: string) => `With little to separate these sides, the match could go either way. The team that handles the pressure better and makes fewer mistakes will likely come out on top.`,
   (h: string, a: string) => `Expect a closely fought contest between two evenly matched sides. The result may well come down to which team is more clinical in the final third.`,
+  (h: string, a: string) => `Form and personnel are remarkably balanced heading into this one, and the margin between the sides could be razor-thin. Fresh legs from the bench could prove pivotal in the closing stages.`,
+  (h: string, a: string) => `With nothing substantive separating these two on paper, a draw would surprise no one — but neither will either side be content with sharing the points. The first goal, again, looks decisive.`,
 ];
 
 const PREDICTION_OPENERS = [
@@ -190,6 +229,26 @@ const PREDICTION_OPENERS = [
     return `With both sides showing flashes of quality, this could go either way. The team that executes their game plan better will prevail.`;
   },
   (h: string, a: string) => `Fans can expect a competitive match with plenty at stake. The first goal could be crucial in shaping how the game unfolds.`,
+  (h: string, a: string, hf: FormSummary, af: FormSummary) => {
+    const diff = hf.points - af.points;
+    if (diff >= 6) return `${h} hold a significant form advantage on paper, and the numbers make them the ones to beat here.`;
+    if (diff <= -6) return `${a} bring the superior current form to this fixture, and the numbers suggest they can leave with something meaningful.`;
+    return `Neither side can be written off, given how close their recent returns have been — it is a genuine coin-flip.`;
+  },
+  (h: string, a: string, hf: FormSummary, af: FormSummary, h2h: H2HSummary) => {
+    const diff = hf.points - af.points;
+    if (diff >= 6) return `The form table points one way, with ${h} looking well placed to extend their momentum.`;
+    if (diff <= -6) return `The form table points one way, and it favours ${a}, who will back themselves to make home advantage count for little.`;
+    if (h2h.isOneSided && h2h.dominantWins >= 3) return `Recent meetings between these sides have followed a one-sided pattern, and history may weigh heavily on ${h2h.dominantSide === "home" ? h : a}'s chances.`;
+    return `This could genuinely go either way, with neither side holding an obvious edge on recent evidence.`;
+  },
+];
+
+const PREDICTION_CLOSERS: PredictionCloserSentence[] = [
+  (comp) => `Kick-off in the ${comp} awaits.`,
+  (comp) => `All eyes turn to the ${comp} when this one gets under way.`,
+  (comp) => `The stage is set in the ${comp}; kick-off cannot come soon enough.`,
+  (comp) => `Whatever unfolds, this ${comp} contest is not to be missed.`,
 ];
 // ─── Main NLG generation function (no AI, no API calls) ────────────────
 
@@ -216,6 +275,9 @@ export function generateNlgAnalysis(
   if (hf.cleanSheets > 0 && hf.avgConceded < 1.5) {
     p1.push(pick(FORM_GOAL_DEFENCE, seed, 3)(homeTeam, hf));
   }
+  if (hf.failedToScore >= 2 && hf.avgScored < 1.5) {
+    p1.push(pick(FORM_FAILED_TO_SCORE, seed, 17)(homeTeam, hf));
+  }
   paragraphs.push(p1.join(" "));
 
   // Paragraph 2: Away team form + H2H
@@ -227,6 +289,9 @@ export function generateNlgAnalysis(
   }
   if (af.isStreak) {
     p2.push(pick(STREAK_SENTENCES, seed, 7)(awayTeam, af));
+  }
+  if (af.failedToScore >= 2 && af.avgScored < 1.5) {
+    p2.push(pick(FORM_FAILED_TO_SCORE, seed, 18)(awayTeam, af));
   }
   if (h2h.recentMeetings > 0) {
     p2.push(pick(H2H_OPENERS, seed, 8)(h2h, homeTeam, awayTeam));
@@ -261,13 +326,21 @@ export function generateNlgAnalysis(
     const { tip, homeScore, awayScore, confidence, homeWin, draw, awayWin } = predictionContext;
     const tipLower = tip.toLowerCase();
     if (tipLower.includes("home win")) {
-      p4.push(`The data points towards a home victory, with the model giving ${homeTeam} a ${homeWin}% chance of winning. A ${homeScore}-${awayScore} scoreline is the most likely outcome based on the expected goal figures.`);
+      p4.push(`The data points towards a home victory, with the data giving ${homeTeam} a ${homeWin}% chance of winning. A ${homeScore}-${awayScore} scoreline is the most likely outcome based on the expected goal figures.`);
     } else if (tipLower.includes("away win")) {
       p4.push(`The balance of play favours the visitors, with ${awayTeam} given a ${awayWin}% chance of taking all three points. The most probable scoreline stands at ${homeScore}-${awayScore}.`);
     } else {
-      p4.push(`This is a closely contested fixture, with the model suggesting a draw is the most likely outcome. The predicted scoreline of ${homeScore}-${awayScore} reflects the evenly matched nature of the contest.`);
+      p4.push(`This is a closely contested fixture, with the data suggesting a draw (${draw}%) is the most likely outcome. The predicted scoreline of ${homeScore}-${awayScore} reflects the evenly matched nature of the contest.`);
     }
-    p4.push(`Kick-off in the ${competition} awaits.`);
+    const confPct = Math.round(confidence);
+    p4.push(
+      confPct >= 75
+        ? `Our level of conviction stands at ${confPct}%, with the analysis strongly behind this prediction.`
+        : confPct >= 55
+          ? `There is reasonable confidence (${confPct}%) behind this prediction, though it is far from a certainty.`
+          : `Confidence here is modest at ${confPct}%, reflecting just how hard this fixture is to call.`
+    );
+    p4.push(pick(PREDICTION_CLOSERS, seed, 19)(competition));
   } else {
     p4.push(pick(PREDICTION_OPENERS, seed, 16)(homeTeam, awayTeam, hf, af, h2h));
     const ptsDiff = Math.abs(hf.points - af.points);
@@ -278,7 +351,7 @@ export function generateNlgAnalysis(
     } else {
       p4.push("With so little to separate these sides, it could come down to which team wants it more on the day.");
     }
-    p4.push(`Kick-off in the ${competition} awaits.`);
+    p4.push(pick(PREDICTION_CLOSERS, seed, 19)(competition));
   }
   paragraphs.push(p4.join(" "));
 
