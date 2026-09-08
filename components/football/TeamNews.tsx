@@ -2,7 +2,7 @@
 // TeamNews — Simple injury list (SportsMole-style)
 // ---------------------------------------------------------------------------
 
-import { Cross } from "lucide-react";
+import { Cross, Square } from "lucide-react";
 import LineupDisplay from "./LineupDisplay";
 
 interface PlayerNews {
@@ -35,11 +35,20 @@ export default function TeamNews({ homeTeam, awayTeam, homeNews, awayNews, lineu
                   })
                   .map((p) => (
                     <li key={p.name} className="flex items-start gap-1.5">
-                      <Cross
-                        fill={p.status === "doubtful" ? "orange" : "red"}
-                        color={p.status === "doubtful" ? "orange" : "red"}
-                        className="h-3.5 w-3.5 mt-0.5 shrink-0 opacity-75"
-                      />
+                      {p.reason === "Red Card" ? (
+                        <Square
+                          fill="red"
+                          color="red"
+                          className="h-3.5 w-3.5 mt-0.5 shrink-0 opacity-75"
+                        />
+                      ) : (
+                        <Cross
+                          fill={p.status === "doubtful" ? "orange" : "red"}
+                          color={p.status === "doubtful" ? "orange" : "red"}
+                          className="h-3.5 w-3.5 mt-0.5 shrink-0 opacity-75"
+                        />
+                      )
+                      }
                       <span>
                         <strong>{p.name}</strong> — {p.reason || p.status}
                       </span>
@@ -62,11 +71,19 @@ export default function TeamNews({ homeTeam, awayTeam, homeNews, awayNews, lineu
                   })
                   .map((p) => (
                     <li key={p.name} className="flex items-start gap-1.5">
-                      <Cross
-                        fill={p.status === "doubtful" ? "orange" : "red"}
-                        color={p.status === "doubtful" ? "orange" : "red"}
-                        className="h-3.5 w-3.5 mt-0.5 shrink-0 opacity-75"
-                      />
+                      {p.reason === "Red Card" ? (
+                        <Square
+                          fill="red"
+                          color="red"
+                          className="h-3.5 w-3.5 mt-0.5 shrink-0 opacity-75"
+                        />
+                      ) : (
+                        <Cross
+                          fill={p.status === "doubtful" ? "orange" : "red"}
+                          color={p.status === "doubtful" ? "orange" : "red"}
+                          className="h-3.5 w-3.5 mt-0.5 shrink-0 opacity-75"
+                        />
+                      )}
                       <span>
                         <strong>{p.name}</strong> — {p.reason || p.status}
                       </span>

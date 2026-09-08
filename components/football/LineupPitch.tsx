@@ -19,14 +19,13 @@ interface Props {
   formation: string;
   startXI: PredictedPlayer[];
   source: "confirmed" | "predicted";
-  confidence?: "high" | "medium" | "low";
   mirrored?: boolean;
   teamName?: string;
   teamLogo?: string;
 }
 
 export default function LineupPitch({
-  formation, startXI, source, confidence, mirrored = false, teamName, teamLogo,
+  formation, startXI, source, mirrored = false, teamName, teamLogo,
 }: Props) {
   const [hoveredPlayer, setHoveredPlayer] = useState<number | null>(null);
 
@@ -110,8 +109,7 @@ export default function LineupPitch({
       {source === "predicted" && (
         <div className="px-3 py-1.5 border-t border-zinc-200 bg-amber-50">
           <p className="text-[9px] text-amber-700 text-center">
-            Predicted lineup — based on recent form, not yet confirmed.
-            {confidence === "low" && " Low confidence — limited recent data."}
+            Predicted lineup — based on recent form.
           </p>
         </div>
       )}
