@@ -34,7 +34,7 @@ export default function TeamNews({ homeTeam, awayTeam, homeNews, awayNews, lineu
                     return 0;
                   })
                   .map((p) => (
-                    <li key={p.name} className="flex items-start gap-1.5">
+                    <li key={p.name} className="flex items-center gap-1.5">
                       {p.reason === "Red Card" ? (
                         <Square
                           fill="red"
