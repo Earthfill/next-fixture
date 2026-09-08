@@ -51,6 +51,10 @@ export const metadata: Metadata = {
   verification: {
     google: "YOUR_GOOGLE_VERIFICATION_CODE", // Replace with your actual Google Search Console verification code
   },
+  other: {
+    // Google AdSense site ownership verification (renders as a <meta> tag in <head>)
+    "google-adsense-account": "ca-pub-3188740496800409",
+  },
   robots: {
     index: true,
     follow: true,
@@ -87,7 +91,7 @@ export default function RootLayout({
         <Script
           id="adsbygoogle-init"
           strategy="afterInteractive"
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX"
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3188740496800409"
           crossOrigin="anonymous"
         />
       </body>
