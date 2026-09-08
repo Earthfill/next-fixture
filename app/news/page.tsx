@@ -8,7 +8,7 @@ import { getFootballNews } from "@/lib/news";
 import NewsSection from "@/components/football/NewsSection";
 import { Newspaper, ExternalLink } from "lucide-react";
 
-export const revalidate = 1800;
+export const revalidate = 36000;
 
 export const metadata: Metadata = {
   title: "Football News — Latest Transfer News & Match Reports",

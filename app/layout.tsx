@@ -48,9 +48,6 @@ export const metadata: Metadata = {
     shortcut: "/favicon.ico",
     apple: "/apple-icon.png",
   },
-  verification: {
-    google: "YOUR_GOOGLE_VERIFICATION_CODE", // Replace with your actual Google Search Console verification code
-  },
   other: {
     // Google AdSense site ownership verification (renders as a <meta> tag in <head>)
     "google-adsense-account": "ca-pub-3188740496800409",
