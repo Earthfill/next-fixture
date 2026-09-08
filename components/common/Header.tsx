@@ -7,7 +7,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { X, Trophy, ChevronRight, Newspaper } from "lucide-react";
+import { X, Trophy, ChevronRight, Newspaper, CalendarDays } from "lucide-react";
 import { LEAGUE_BY_COUNTRY, COUNTRY_ORDER } from "@/lib/football/config";
 
 export default function Header() {
@@ -34,6 +34,10 @@ export default function Header() {
           <nav className="flex items-center gap-1">
             <Link href="/" className="rounded px-3 py-1.5 text-sm font-medium text-white/80 hover:text-white hover:bg-white/10 transition-colors">
               Home
+            </Link>
+            <Link href="/fixtures" className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium text-white/80 hover:text-white hover:bg-white/10 transition-colors">
+              <CalendarDays className="h-4 w-4" />
+              Fixtures
             </Link>
             <Link href="/news" className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium text-white/80 hover:text-white hover:bg-white/10 transition-colors">
               <Newspaper className="h-4 w-4" />

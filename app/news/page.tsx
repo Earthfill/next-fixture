@@ -6,6 +6,8 @@ import React from "react";
 import type { Metadata } from "next";
 import { getFootballNews } from "@/lib/news";
 import NewsSection from "@/components/football/NewsSection";
+import AdSlot from "@/components/common/AdSlot";
+import { AD_SLOTS } from "@/lib/ads";
 import { Newspaper, ExternalLink } from "lucide-react";
 
 export const revalidate = 36000;
@@ -57,6 +59,9 @@ export default async function NewsPage({
           The Guardian <ExternalLink className="h-3.5 w-3.5" />
         </a>
       </div>
+
+      {/* Ad slot — news leaderboard */}
+      {/* <AdSlot slotId="news-leaderboard-1" {...AD_SLOTS["news-leaderboard-1"]} className="mt-4" /> */}
 
       {news.length === 0 ? (
         <div className="border border-zinc-200 p-8 text-center">

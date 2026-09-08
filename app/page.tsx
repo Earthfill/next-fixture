@@ -8,6 +8,8 @@ import { getAvailableMatchdays, getFixturesByDateGroupedByLeague } from "@/lib/c
 import { getFootballNews } from "@/lib/news";
 import NewsSection from "@/components/football/NewsSection";
 import MatchdayList from "@/components/football/MatchdayList";
+import AdSlot from "@/components/common/AdSlot";
+import { AD_SLOTS } from "@/lib/ads";
 
 export const revalidate = 10800; // 3 hours
 
@@ -67,9 +69,8 @@ export default async function HomePage() {
             "@type": "SearchAction",
             target: {
               "@type": "EntryPoint",
-              urlTemplate: `${
-                process.env.NEXT_PUBLIC_SITE_URL as string
-              }/search?q={search_term_string}`,
+              urlTemplate: `${process.env.NEXT_PUBLIC_SITE_URL as string
+                }/search?q={search_term_string}`,
             },
             "query-input": "required name=search_term_string",
           },
@@ -90,6 +91,9 @@ export default async function HomePage() {
       ) : (
         <MatchdayList matchdays={validMatchdays} />
       )}
+
+      {/* Ad slot — homepage leaderboard (compact 60px until ads fill) */}
+      {/* <AdSlot slotId="home-leaderboard-1" {...AD_SLOTS["home-leaderboard-1"]} className="mt-4" height={60} /> */}
 
       {/* Latest Football News */}
       <div className="mt-10">

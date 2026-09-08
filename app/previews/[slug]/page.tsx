@@ -13,7 +13,8 @@ import { getFixtureLineups, getTeamUpcomingFixtures, getLeagueStandings, getFixt
 import { computePrediction } from "@/lib/football/win-probability";
 import { generateNlgAnalysis } from "@/lib/football/nlg-analysis";
 import { getAdminOverride } from "@/lib/admin-overrides";
-// import AdSlot from "@/components/common/AdSlot";
+import AdSlot from "@/components/common/AdSlot";
+import { AD_SLOTS } from "@/lib/ads";
 import PredictionCard from "@/components/football/PredictionCard";
 import WinProbability from "@/components/football/WinProbability";
 import TeamNews from "@/components/football/TeamNews";
@@ -160,8 +161,8 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
         )}
 
         {/* 3. Win Probability + Ad */}
-        <div className="mt-6 grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2">
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:block">
+          <div className="lg:mr-80">
             <WinProbability
               homeWin={homeWin}
               draw={draw}
@@ -170,12 +171,12 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
               awayTeam={fixture.awayTeam.shortName}
             />
           </div>
-          <div className="flex items-start justify-center lg:justify-end">
-            {/* <AdSlot slotId="preview-rect-1" format="rectangle" /> */}
+          <div className="flex items-start justify-center min-w-0">
+            {/* <AdSlot slotId="preview-rect-1" {...AD_SLOTS["preview-rect-1"]} /> */}
           </div>
         </div>
 
-        <hr className="sm-divider" />
+        <hr className="sm-divider clear-both" />
 
         {/* 4. Tactical analysis */}
         {tip !== "No predictions available" && (

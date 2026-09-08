@@ -7,8 +7,11 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getFixturesByDateGroupedByLeague } from "@/lib/cache/pages";
+import { getFixturesByDateGroupedByLeague, getAvailableMatchdays } from "@/lib/cache/pages";
 import FootballMatchCard from "@/components/football/FootballMatchCard";
+import AdSlot from "@/components/common/AdSlot";
+import FixtureDateNav from "@/components/football/FixtureDateNav";
+import { AD_SLOTS } from "@/lib/ads";
 import { ChevronRight, Calendar } from "lucide-react";
 
 export const revalidate = 10800; // 3 hours
@@ -49,6 +52,7 @@ export default async function FixturesByDatePage({
   const { date } = await params;
   const matchday = await getFixturesByDateGroupedByLeague(date);
   if (!matchday) notFound();
+  const matchdays = await getAvailableMatchdays();
 
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6">
@@ -61,6 +65,9 @@ export default async function FixturesByDatePage({
         <span className="text-zinc-500">{matchday.label}</span>
       </div>
 
+      {/* Date navigation — prev/next + all available matchdays */}
+      <FixtureDateNav matchdays={matchdays} currentDate={date} />
+
       {/* Header */}
       <h1 className="sm-heading-lg mb-1">
         Football Fixtures — {matchday.label}
@@ -69,8 +76,11 @@ export default async function FixturesByDatePage({
         {matchday.fixtureCount} matches across {matchday.leagues.length} competitions
       </p>
 
+      {/* Ad slot — fixtures leaderboard */}
+      {/* <AdSlot slotId="fixture-leaderboard-1" {...AD_SLOTS["fixture-leaderboard-1"]} className="mt-4" /> */}
+
       {/* League sections */}
-      <div className="space-y-8">
+      <div className="space-y-8 mt-6">
         {matchday.leagues.map((league) => (
           <section key={league.competition}>
             <div className="flex items-center justify-between mb-1">

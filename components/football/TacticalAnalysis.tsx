@@ -20,7 +20,7 @@ export default function TacticalAnalysis({ analysis, homeTeam, awayTeam }: { ana
   const paragraphs = analysis.split(/\n\n+/).filter(Boolean);
 
   return (
-    <div>
+    <>
       <h2 className="sm-section-heading">Match Preview</h2>
       <div className="sm-body">
         {paragraphs.map((p, i) => (
@@ -45,6 +45,6 @@ export default function TacticalAnalysis({ analysis, homeTeam, awayTeam }: { ana
           </div>
         </div> */}
       </div>
-    </div>
+    </>
   );
 }
