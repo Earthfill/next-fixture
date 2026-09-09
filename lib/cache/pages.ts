@@ -16,6 +16,7 @@
 
 import { cacheAside, writeCache } from "@/lib/cache";
 import { standingsKey, upcomingFixturesKey, UPCOMING_DAYS, TTL } from "@/lib/cache/keys";
+import { filterHidden, isSlugHidden } from "@/lib/hidden-fixtures";
 import type {
   Fixture, LeagueData, MatchdayGroup, MatchPreview, TopScorer, LineupEntry, Team, HighlightVideo,
 } from "@/lib/types";
@@ -34,7 +35,7 @@ import { getFixtureLineups as getFixtureLineupsRaw } from "@/lib/football/lineup
 import { getFixtureOdds as getFixtureOddsRaw } from "@/lib/football/odds";
 import { getYouTubeHighlights as getYouTubeHighlightsRaw } from "@/lib/football/highlights";
 
-/** Upcoming fixtures across all covered leagues (24h). */
+/** Upcoming fixtures across all covered leagues (24h). Hidden matches excluded. */
 export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
   const days = value ?? UPCOMING_DAYS;
   const { data } = await cacheAside<Fixture[]>(
@@ -42,7 +43,7 @@ export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
     TTL.fixtures,
     () => getUpcomingFixturesRaw(days).then((r) => r ?? [])
   );
-  return data ?? [];
+  return filterHidden(data ?? []);
 }
 
 /**
@@ -86,7 +87,14 @@ export async function getLeagueStandings(leagueSlug: string): Promise<LeagueData
     TTL.standings,
     () => getLeagueStandingsRaw(leagueSlug)
   );
-	return data ?? null;
+  if (!data) return null;
+  if (data.upcomingFixtures && data.upcomingFixtures.length > 0) {
+    return {
+      ...data,
+      upcomingFixtures: await filterHidden(data.upcomingFixtures),
+    };
+  }
+  return data;
 }
 
 /** Top scorers for a league (24h. */
@@ -113,20 +121,24 @@ export async function getTopAssists(leagueSlug: string, limit?: number): Promise
   return data ?? [];
 }
 
-/** Recent completed matches for a league (12h. */
+/** Recent completed matches for a league (12h). Hidden matches excluded. */
 export async function getPastResults(leagueSlug: string, limit?: number): Promise<Fixture[]> {
-  const lim = limit ??  ​10;
+  const lim = limit ?? 10;
   const { data } = await cacheAside<Fixture[]>(
     `pastresults:${leagueSlug}:${lim}`,
     TTL.standings,
     () => getPastResultsRaw(leagueSlug, lim).then((r) => r ?? [])
   );
-	
-  return data ?? [];
+
+  return filterHidden(data ?? []);
 }
 
-/** Full match preview payload (~8-10 upstream calls; 10m TTL. */
+/**
+ * Full match preview payload (~8-10 upstream calls; 10m TTL). Hidden matches
+ * resolve to null so their preview page 404s on the public site.
+ */
 export async function getMatchPreviewBySlug(slug: string): Promise<MatchPreview | null> {
+  if (await isSlugHidden(slug)) return null;
   const { data } = await cacheAside<MatchPreview | null>(
     `preview:${slug}`,
     TTL.preview,
@@ -135,17 +147,17 @@ export async function getMatchPreviewBySlug(slug: string): Promise<MatchPreview 
 	return data ?? null;
 }
 
-/** Upcoming fixtures for one team (24h. */
+/** Upcoming fixtures for one team (24h). Hidden matches excluded. */
 export async function getTeamUpcomingFixtures(teamId: number, count?: number): Promise<Fixture[]> {
   const c = count ?? 5;
-	
+
   const { data } = await cacheAside<Fixture[]>(
     `teamupcoming:${teamId}:${c}`,
     TTL.fixtures,
     () => getTeamUpcomingFixturesRaw(teamId, c).then((r) => r ?? [])
   );
-	
-  return data ?? [];
+
+  return filterHidden(data ?? []);
 }
 
 /** Lineups for a fixture (confirmed + predicted fallback; 10m TTL. */

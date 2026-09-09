@@ -8,6 +8,7 @@ import Link from "next/link";
 import { getUpcomingFixturesFresh } from "@/lib/cache/pages";
 import { buildAvailableMatchdays } from "@/lib/football/service";
 import { getOverriddenSlugs } from "@/lib/admin-overrides";
+import { getHiddenSlugs } from "@/lib/hidden-fixtures";
 import JobRunner from "@/components/admin/JobRunner";
 import FixtureList from "@/components/admin/FixtureList";
 import {
@@ -38,10 +39,16 @@ export default async function AdminPage() {
     await getOverriddenSlugs(fixtures.map((f) => f.slug))
   );
 
+  // Which fixtures are hidden from the public site.
+  const hiddenSlugs = await getHiddenSlugs();
+
   const totalFixtures = fixtures.length;
   const totalMatchdays = matchdays.length;
   const leagues = [...new Set(fixtures.map((f) => f.competition))];
   const totalEdited = overriddenSlugs.size;
+  // Hidden count scoped to the fixtures currently in this table (hidden slugs
+  // for long-finished matches may linger in the store).
+  const totalHidden = fixtures.filter((f) => hiddenSlugs.has(f.slug)).length;
 
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8">
@@ -170,7 +177,7 @@ export default async function AdminPage() {
             <div>
               <h2 className="text-sm font-bold text-zinc-900">Upcoming Fixtures</h2>
               <p className="text-xs text-zinc-500">
-                {totalFixtures} matches · {totalMatchdays} matchdays · fetched live from API
+                {totalFixtures} matches · {totalMatchdays} matchdays · {totalHidden} hidden · fetched live from API
               </p>
             </div>
           </div>
@@ -181,6 +188,7 @@ export default async function AdminPage() {
         <FixtureList
           fixtures={fixtures}
           overriddenSlugs={Array.from(overriddenSlugs)}
+          hiddenSlugs={Array.from(hiddenSlugs)}
           token={adminToken as string}
         />
       </div>

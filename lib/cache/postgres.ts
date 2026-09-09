@@ -265,3 +265,50 @@ export async function pgOverrideList(slugs: string[]): Promise<string[]> {
     return [];
   }
 }
+
+// ---------- Hidden fixtures (separate table, never bulk-cleared) -------------
+
+const HIDDEN_TABLE = "hidden_fixtures";
+
+/** Every slug currently hidden from the public site. */
+export async function pgHiddenList(): Promise<string[]> {
+  await initPostgres();
+  if (!pool || !available) return [];
+  try {
+    const res = await pool.query(`SELECT slug FROM "${HIDDEN_TABLE}"`);
+    return res.rows.map((r) => String(r.slug));
+  } catch (err) {
+    console.warn("[admin:hidden] pg list failed:", (err as Error).message);
+    return [];
+  }
+}
+
+/** Hide a fixture (upsert). Returns true when committed. */
+export async function pgHiddenAdd(slug: string): Promise<boolean> {
+  await initPostgres();
+  if (!pool || !available) return false;
+  try {
+    await pool.query(
+      `INSERT INTO "${HIDDEN_TABLE}" (slug) VALUES ($1)
+       ON CONFLICT (slug) DO NOTHING`,
+      [slug]
+    );
+    return true;
+  } catch (err) {
+    console.warn("[admin:hidden] pg add failed:", (err as Error).message);
+    return false;
+  }
+}
+
+/** Un-hide a fixture. Returns true when committed. */
+export async function pgHiddenRemove(slug: string): Promise<boolean> {
+  await initPostgres();
+  if (!pool || !available) return false;
+  try {
+    await pool.query(`DELETE FROM "${HIDDEN_TABLE}" WHERE slug = $1`, [slug]);
+    return true;
+  } catch (err) {
+    console.warn("[admin:hidden] pg remove failed:", (err as Error).message);
+    return false;
+  }
+}

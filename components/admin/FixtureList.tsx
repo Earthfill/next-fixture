@@ -6,8 +6,9 @@
 // All filtering & sorting happen in the browser (no server round-trips):
 //   - Free-text search (home / away / competition)
 //   - Competition dropdown filter
-//   - State filter (All / Edited / Auto)
+//   - State filter (All / Edited / Auto / Hidden)
 //   - Sortable columns (Kick-off, Competition, Home, Away, State)
+//   - Per-row Hide/Show toggle removes/restores the match on the public site
 // ---------------------------------------------------------------------------
 
 import { useMemo, useState } from "react";
@@ -18,6 +19,9 @@ import {
   ChevronsUpDown,
   Clock,
   ExternalLink,
+  EyeOff,
+  Eye,
+  Loader2,
   Pencil,
   Search,
   SlidersHorizontal,
@@ -28,12 +32,13 @@ import type { Fixture } from "@/lib/types";
 interface FixtureListProps {
   fixtures: Fixture[];
   overriddenSlugs: string[];
+  hiddenSlugs: string[];
   token: string;
 }
 
 type SortKey = "date" | "competition" | "home" | "away" | "state";
 type SortDir = "asc" | "desc";
-type StateFilter = "all" | "edited" | "auto";
+type StateFilter = "all" | "edited" | "auto" | "hidden";
 
 const SORTABLE: { key: SortKey; label: string; align?: "center" | "right" }[] = [
   { key: "date", label: "Kick-off" },
@@ -58,8 +63,13 @@ function formatTime(iso: string): string {
   });
 }
 
-export default function FixtureList({ fixtures, overriddenSlugs, token }: FixtureListProps) {
+export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, token }: FixtureListProps) {
   const editedSet = useMemo(() => new Set(overriddenSlugs), [overriddenSlugs]);
+  // Local, mutable copy of the hidden set so a Hide/Show toggle updates the
+  // table immediately without a server round-trip for the whole list.
+  const [hiddenSet, setHiddenSet] = useState<Set<string>>(() => new Set(hiddenSlugs));
+  const [busySlug, setBusySlug] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   const [query, setQuery] = useState("");
   const [competition, setCompetition] = useState("");
@@ -79,6 +89,7 @@ export default function FixtureList({ fixtures, overriddenSlugs, token }: Fixtur
       if (competition && f.competition !== competition) return false;
       if (stateFilter === "edited" && !editedSet.has(f.slug)) return false;
       if (stateFilter === "auto" && editedSet.has(f.slug)) return false;
+      if (stateFilter === "hidden" && !hiddenSet.has(f.slug)) return false;
       if (q) {
         const haystack =
           `${f.homeTeam.name} ${f.awayTeam.name} ${f.competition}`.toLowerCase();
@@ -88,7 +99,8 @@ export default function FixtureList({ fixtures, overriddenSlugs, token }: Fixtur
     });
 
     const sign = sortDir === "asc" ? 1 : -1;
-    const stateVal = (f: Fixture) => (editedSet.has(f.slug) ? 1 : 0);
+    // Hidden sorts above Edited above Auto.
+    const stateVal = (f: Fixture) => (hiddenSet.has(f.slug) ? 2 : 0) + (editedSet.has(f.slug) ? 1 : 0);
 
     return filtered.sort((a, b) => {
       switch (sortKey) {
@@ -104,7 +116,42 @@ export default function FixtureList({ fixtures, overriddenSlugs, token }: Fixtur
           return sign * (stateVal(a) - stateVal(b));
       }
     });
-  }, [fixtures, editedSet, query, competition, stateFilter, sortKey, sortDir]);
+  }, [fixtures, editedSet, hiddenSet, query, competition, stateFilter, sortKey, sortDir]);
+
+  async function toggleHidden(f: Fixture): Promise<void> {
+    if (busySlug) return;
+    const willHide = !hiddenSet.has(f.slug);
+    setBusySlug(f.slug);
+    setActionMessage(null);
+    try {
+      const res = await fetch("/api/admin/hidden", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, slug: f.slug, hidden: willHide }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setHiddenSet((prev) => {
+          const next = new Set(prev);
+          if (willHide) next.add(f.slug);
+          else next.delete(f.slug);
+          return next;
+        });
+        setActionMessage({
+          ok: true,
+          text: willHide
+            ? `"${f.homeTeam.name} vs ${f.awayTeam.name}" is now hidden from the public site.`
+            : `"${f.homeTeam.name} vs ${f.awayTeam.name}" is visible again.`,
+        });
+      } else {
+        setActionMessage({ ok: false, text: data.error || "Failed to update visibility." });
+      }
+    } catch {
+      setActionMessage({ ok: false, text: "Failed to update visibility." });
+    } finally {
+      setBusySlug(null);
+    }
+  }
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -171,11 +218,13 @@ export default function FixtureList({ fixtures, overriddenSlugs, token }: Fixtur
           <option value="all">All states</option>
           <option value="edited">Edited</option>
           <option value="auto">Auto</option>
+          <option value="hidden">Hidden</option>
         </select>
 
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-zinc-500">
             {rows.length} of {fixtures.length} matches
+            {hiddenSet.size > 0 ? ` · ${hiddenSet.size} hidden` : ""}
           </span>
           {hasFilters && (
             <button
@@ -188,6 +237,19 @@ export default function FixtureList({ fixtures, overriddenSlugs, token }: Fixtur
           )}
         </div>
       </div>
+
+      {/* Hide/Show action feedback */}
+      {actionMessage && (
+        <div
+          className={`mt-2 rounded-lg border px-3 py-2 text-xs leading-relaxed ${
+            actionMessage.ok
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {actionMessage.text}
+        </div>
+      )}
 
   {/* Table */}
       <div className="overflow-x-auto">
@@ -225,8 +287,10 @@ export default function FixtureList({ fixtures, overriddenSlugs, token }: Fixtur
             ) : (
               rows.map((f) => {
                 const edited = editedSet.has(f.slug);
+                const hidden = hiddenSet.has(f.slug);
+                const busy = busySlug === f.slug;
                 return (
-                  <tr key={f.id} className="hover:bg-zinc-50/70">
+                  <tr key={f.id} className={`hover:bg-zinc-50/70 ${hidden ? "bg-red-50/40" : ""}`}>
                     <td className="px-5 py-3 whitespace-nowrap">
                       <div className="text-sm font-medium text-zinc-800">{formatDate(f.date)}</div>
                       <div className="mt-0.5 flex items-center gap-1 text-xs text-zinc-400">
@@ -241,7 +305,11 @@ export default function FixtureList({ fixtures, overriddenSlugs, token }: Fixtur
                     <td className="px-4 py-3 text-sm font-medium text-zinc-800">{f.homeTeam.name}</td>
                     <td className="px-4 py-3 text-sm font-medium text-zinc-800">{f.awayTeam.name}</td>
                     <td className="px-4 py-3 text-center">
-                      {edited ? (
+                      {hidden ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                          <EyeOff className="h-3 w-3" /> Hidden
+                        </span>
+                      ) : edited ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
                           <Pencil className="h-3 w-3" /> Edited
                         </span>
@@ -255,10 +323,31 @@ export default function FixtureList({ fixtures, overriddenSlugs, token }: Fixtur
                       <Link
                         href={`/previews/${f.slug}`}
                         prefetch={false}
-                        className="mr-4 inline-flex items-center gap-1 text-xs font-medium text-[#002b5c] hover:underline"
+                        className={`mr-2 inline-flex items-center gap-1 text-xs font-medium ${hidden ? "text-zinc-300" : "text-[#002b5c] hover:underline"}`}
+                        aria-disabled={hidden}
+                        onClick={(e) => { if (hidden) e.preventDefault(); }}
                       >
                         <ExternalLink className="h-3 w-3" /> View
                       </Link>
+                      <button
+                        type="button"
+                        onClick={() => toggleHidden(f)}
+                        disabled={busy || !!busySlug}
+                        className={`mr-2 inline-flex items-center gap-1 text-xs font-medium disabled:opacity-50 ${
+                          hidden
+                            ? "text-emerald-600 hover:text-emerald-700"
+                            : "text-red-600 hover:text-red-700"
+                        }`}
+                      >
+                        {busy ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : hidden ? (
+                          <Eye className="h-3 w-3" />
+                        ) : (
+                          <EyeOff className="h-3 w-3" />
+                        )}{" "}
+                        {hidden ? "Show" : "Hide"}
+                      </button>
                       <FixtureEditor
                         slug={f.slug}
                         date={f.date}
