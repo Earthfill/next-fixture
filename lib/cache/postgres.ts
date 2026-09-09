@@ -15,6 +15,26 @@ let initPromise: Promise<boolean> | null = null;
 
 const KV_TABLE = "api_cache";
 
+/** Resolve after the pool has finished processing all queued statements
+ * (including the write just submitted) — the closest cross-platform signal
+ * that a committed write is visible to subsequent reads. Best-effort; times
+ * out rather than hanging a request. */
+export async function pgDrainPool(): Promise<void> {
+  if (!pool || !available) return;
+  const p = pool;
+  try {
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => resolve(), 2000);
+      p.once("idle", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+    });
+  } catch {
+    // best-effort — caller retries with reads as a fallback
+  }
+}
+
 function createPool(): Pool | null {
   const url = process.env.DATABASE_URL;
   if (!url) return null;

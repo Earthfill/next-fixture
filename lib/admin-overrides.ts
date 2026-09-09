@@ -14,6 +14,7 @@
 import {
   initPostgres,
   pgAvailable,
+  pgDrainPool,
   pgOverrideGet,
   pgOverrideSet,
   pgOverrideDelete,
@@ -82,7 +83,8 @@ export interface SetAdminOverrideResult {
 export async function setAdminOverride(
   slug: string,
   patch: AdminOverridePatch,
-  expiresAt: string
+  expiresAt: string,
+  opts?: { sync?: boolean }
 ): Promise<SetAdminOverrideResult> {
   await initPostgres();
 
@@ -108,6 +110,14 @@ export async function setAdminOverride(
   let persisted = false;
   if (pgAvailable()) {
     persisted = await pgOverrideSet(slug, override, expiresAt).catch(() => false);
+    // In sync mode we must not return until the write can be read back — the
+    // caller re-renders/revalidates the preview immediately, and a write that
+    // is still buffered would make the next render miss the override. pg's `idle`
+    // event only fires after the query has been fully processed by the backend,
+    // which is the strongest signal we have that the data is durable server-side.
+    if (persisted && opts?.sync) {
+      await pgDrainPool();
+    }
   }
   // Keep the memory map warm for the no-PG fallback path.
   memoryStore.set(slug, override);

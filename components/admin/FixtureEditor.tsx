@@ -63,6 +63,17 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
   }
 
   async function save(): Promise<void> {
+    // The API rejects saves once kickoff has passed (the override would expire
+    // immediately and be invisible to the preview). Show that guard client-side
+    // too so the admin isn't confused by a failure after the fact.
+    if (new Date(date).getTime() <= Date.now()) {
+      setMessage({
+        ok: false,
+        text: "This match has already kicked off — prediction overrides only apply before kickoff, so the preview can't be updated.",
+      });
+      return;
+    }
+
     setSaving(true);
     setMessage(null);
     const hasScore = home !== "" && away !== "";

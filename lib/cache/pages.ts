@@ -57,7 +57,12 @@ export async function getUpcomingFixturesFresh(): Promise<Fixture[]> {
   if (fixtures.length > 0) {
     await writeCache(upcomingFixturesKey(UPCOMING_DAYS), fixtures, TTL.fixtures);
   }
-  return fixtures;
+  // Matches whose kickoff has already passed are dropped. Their admin
+  // overrides expire at kickoff (the read path filters `expires_at > now()`),
+  // so letting an admin "edit" them writes a silently-invisible override — the
+  // exact "saved but the preview didn't update" bug.
+  const nowMs = Date.now();
+  return fixtures.filter((f) => new Date(f.date).getTime() > nowMs);
 }
 
 /**
