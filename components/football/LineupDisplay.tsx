@@ -34,7 +34,7 @@ function TeamLineupCard({ entry, side }: { entry: LineupEntry; side: "home" | "a
     <div className="border border-zinc-200 bg-white rounded-sm overflow-hidden">
       {/* Team header */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-200 bg-zinc-50">
-        <Image src={team.logo} alt={team.name} width={20} height={20} className="h-5 w-5 object-contain" />
+        <Image src={team.logo} alt={`${team.name} logo`} width={20} height={20} className="h-5 w-5 object-contain" />
         <span className="text-sm font-semibold text-zinc-800">{team.name}</span>
         <span className="text-[11px] text-zinc-500 ml-auto">Formation: {formation || "N/A"}</span>
         {predicted && (

@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Football News — Latest Transfer News & Match Reports",
   description:
-    "Latest football news including transfer rumours, match reports, injury updates and analysis. Stay informed with daily football headlines across Premier League, La Liga, Serie A and Bundesliga.",
+    "Latest football news, transfer rumours, match reports and injury updates from Europe's top leagues.",
   openGraph: {
     title: "Football News — Latest Updates | Next Fixture",
     description:

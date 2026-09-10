@@ -54,7 +54,7 @@ export default function NewsSection({ news, layout = "fullwidth", title = "Lates
             <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer"
               className="flex items-start gap-3 px-3 py-2.5 border-b border-zinc-100 last:border-b-0 hover:bg-zinc-50 transition-colors group">
               {item.imageUrl && (
-                <NewsImage src={item.imageUrl} alt="" width={48} height={48} className="h-12 w-12 object-cover rounded shrink-0" fallbackClassName="h-12 w-12 rounded shrink-0" />
+                <NewsImage src={item.imageUrl} alt={item.title} width={48} height={48} className="h-12 w-12 object-cover rounded shrink-0" fallbackClassName="h-12 w-12 rounded shrink-0" />
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium text-zinc-800 leading-snug group-hover:text-[#002b5c] transition-colors line-clamp-2">{item.title}</p>
@@ -98,7 +98,7 @@ export default function NewsSection({ news, layout = "fullwidth", title = "Lates
             {featured.imageUrl ? (
               <NewsImage
                 src={boostImageUrl(featured.imageUrl, 1200)}
-                alt=""
+                alt={featured.title}
                 fill
                 className="object-cover opacity-80 group-hover:opacity-100 transition-opacity"
                 sizes="(max-width: 768px) 100vw, 90vw"
@@ -134,7 +134,7 @@ export default function NewsSection({ news, layout = "fullwidth", title = "Lates
                 {item.imageUrl ? (
                   <NewsImage
                     src={boostImageUrl(item.imageUrl, 640)}
-                    alt=""
+                    alt={item.title}
                     fill
                     className="object-cover transition-transform duration-300 group-hover:scale-105"
                     sizes="(max-width: 768px) 100vw, 40vw"

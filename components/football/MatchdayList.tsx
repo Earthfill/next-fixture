@@ -130,7 +130,7 @@ export default function MatchdayList({ matchdays }: Props) {
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
                         {league.competitionLogo && (
-                          <Image src={league.competitionLogo} alt="" width={20} height={20} className="h-5 w-5" />
+                          <Image src={league.competitionLogo} alt={`${league.competition} logo`} width={20} height={20} className="h-5 w-5" />
                         )}
                         <h3
                           className="sm-section-heading mb-0 pb-0"

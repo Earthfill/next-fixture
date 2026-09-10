@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: { params: Promise<{ "league-s
   const n = leagueNames[s] ?? s;
   return {
     title: `${n} Standings & Predictions — Football League Table & Preview`,
-    description: `Full ${n} standings, upcoming fixtures, top scorers and match predictions. Get expert analysis, betting tips and head-to-head stats for every ${n} match this season.`,
+    description: `${n} standings, fixtures, top scorers and match predictions with expert analysis and betting tips.`,
     openGraph: {
       title: `${n} Standings & Predictions | Next Fixture`,
       description: `Full ${n} league table, fixtures, top scorers and match predictions with expert analysis.`,
@@ -94,7 +94,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ "league
       />
 
       <div className="flex items-center gap-3 mb-6">
-        <Image src={league.logo} alt="" width={32} height={32} className="h-8 w-8" />
+        <Image src={league.logo} alt={`${league.name} logo`} width={32} height={32} className="h-8 w-8" />
         <h1 className="sm-heading-lg">{league.name}</h1>
       </div>
 
@@ -160,11 +160,11 @@ export default async function LeaguePage({ params }: { params: Promise<{ "league
                     <div className="grid grid-cols-[1fr_15px_1fr] gap-x-6 text-sm">
                       <div className="flex items-center gap-2 justify-end">
                         <span className="font-medium text-zinc-700">{f.homeTeam.shortName}</span>
-                        <Image src={f.homeTeam.logo} alt={f.homeTeam.shortName} width={20} height={20} className="h-5 w-5" />
+                        <Image src={f.homeTeam.logo} alt={`${f.homeTeam.shortName} logo`} width={20} height={20} className="h-5 w-5" />
                       </div>
                       <span className="text-[10px] text-zinc-400">vs</span>
                       <div className="flex items-center gap-2">
-                        <Image src={f.awayTeam.logo} alt={f.homeTeam.shortName} width={20} height={20} className="h-5 w-5" />
+                        <Image src={f.awayTeam.logo} alt={`${f.awayTeam.shortName} logo`} width={20} height={20} className="h-5 w-5" />
                         <span className="font-medium text-zinc-700">{f.awayTeam.shortName}</span>
                       </div>
                     </div>
@@ -216,7 +216,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ "league
                             <div className="min-w-0">
                               <p className="text-sm font-medium text-zinc-800 truncate">{scorer.player.name}</p>
                               <div className="flex items-center gap-1">
-                                <Image src={scorer.team.logo} alt="" width={14} height={14} className="h-3.5 w-3.5" />
+                                <Image src={scorer.team.logo} alt={`${scorer.team.name} logo`} width={14} height={14} className="h-3.5 w-3.5" />
                                 <span className="text-[11px] text-zinc-500 truncate">{scorer.team.name}</span>
                               </div>
                             </div>
@@ -265,7 +265,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ "league
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-zinc-800 truncate">{player.player.name}</p>
                             <div className="flex items-center gap-1">
-                              <Image src={player.team.logo} alt="" width={14} height={14} className="h-3.5 w-3.5" />
+                              <Image src={player.team.logo} alt={`${player.team.name} logo`} width={14} height={14} className="h-3.5 w-3.5" />
                               <span className="text-[11px] text-zinc-500 truncate">{player.team.name}</span>
                             </div>
                           </div>

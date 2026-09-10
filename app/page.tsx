@@ -17,7 +17,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL as string;
 export const metadata: Metadata = {
   title: "Football Predictions, Previews & Betting Tips Today",
   description:
-    "Get today's football predictions, match previews, score predictions and betting tips for Premier League, La Liga, Serie A & Bundesliga. Expert analysis and head-to-head stats for every fixture.",
+    "Today's football predictions, match previews and betting tips for the Premier League, La Liga, Serie A and Bundesliga.",
   openGraph: {
     title: "Football Predictions, Previews & Betting Tips Today | Next Fixture",
     description:

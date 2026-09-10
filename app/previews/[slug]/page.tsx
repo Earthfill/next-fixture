@@ -33,7 +33,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { fixture } = preview;
   return {
     title: `${fixture.homeTeam.name} vs ${fixture.awayTeam.name} Preview, Prediction & Betting Tips`,
-    description: `${fixture.homeTeam.name} vs ${fixture.awayTeam.name} — ${fixture.competition} preview with score prediction, betting tips, team news, stats, H2H and odds. Expert analysis for this match.`,
+    description: `${fixture.homeTeam.name} vs ${fixture.awayTeam.name} — ${fixture.competition} preview with score prediction, betting tips and team news.`,
     alternates: { canonical: `${SITE_URL}/previews/${slug}` },
     openGraph: {
       type: "website", locale: "en_GB",

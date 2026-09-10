@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "About Us — Football Predictions & Previews Platform",
   description:
-    "Next Fixture is a football analytics platform providing in-depth match previews, score predictions, tactical analysis and statistical breakdowns across Europe's top leagues including Premier League, La Liga, Serie A and Bundesliga.",
+    "Next Fixture is a football analytics platform for match previews, score predictions and tactical analysis.",
   openGraph: {
     title: "About Next Fixture — Football Predictions Platform",
     description:

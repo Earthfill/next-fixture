@@ -6,7 +6,7 @@ import { Shield, Cookie, Users, AlertTriangle, HelpCircle, Mail, ExternalLink } 
 export const metadata: Metadata = {
   title: "Privacy Policy — Responsible Gambling & Data Protection",
   description:
-    "Privacy policy and legal disclaimers for Next Fixture. Information about cookies, affiliate disclosure and responsible gambling commitments. All betting content is for adults aged 18+.",
+    "Privacy policy and legal disclaimers for Next Fixture, including cookies, affiliate disclosure and responsible gambling.",
   openGraph: {
     title: "Privacy Policy | Next Fixture",
     description:

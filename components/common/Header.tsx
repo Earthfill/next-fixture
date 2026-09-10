@@ -133,7 +133,7 @@ export default function Header() {
                             onClick={() => setDrawerOpen(false)}
                             className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-700 transition-colors group ${isActive ? "bg-[#002b5c] text-white" : "hover:text-[#002b5c] hover:bg-zinc-50"}`}
                           >
-                            {league.logo && <Image src={league.logo} alt="" width={20} height={20} className="h-5 w-5 object-contain" />}
+                            {league.logo && <Image src={league.logo} alt={`${league.name} logo`} width={20} height={20} className="h-5 w-5 object-contain" />}
                             <span className={`${isActive ? "text-white" : ""} flex-1 font-medium`}>{league.name}</span>
                             <ChevronRight className="h-4 w-4 text-zinc-300 group-hover:text-[#002b5c] transition-colors" />
                           </Link>

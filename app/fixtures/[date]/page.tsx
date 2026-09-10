@@ -29,7 +29,7 @@ export async function generateMetadata({
 
   return {
     title: `Football Fixtures — ${label} | Premier League, La Liga & More`,
-    description: `Full list of football fixtures for ${label} across the Premier League, La Liga, Serie A, Bundesliga and more. Get match previews, predictions and betting tips for all games.`,
+    description: `All football fixtures for ${label} with previews, predictions and betting tips for top European leagues.`,
     alternates: { canonical: `${SITE_URL}/fixtures/${date}` },
     openGraph: {
       title: `Football Fixtures — ${label} | Next Fixture`,
@@ -86,7 +86,7 @@ export default async function FixturesByDatePage({
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
                 {league.competitionLogo && (
-                  <Image src={league.competitionLogo} alt="" width={20} height={20} className="h-5 w-5" />
+                  <Image src={league.competitionLogo} alt={`${league.competition} logo`} width={20} height={20} className="h-5 w-5" />
                 )}
                 <h2 className="sm-section-heading mb-0 pb-0" style={{ borderBottom: "none", marginBottom: 0, paddingBottom: 0 }}>
                   {league.competition}

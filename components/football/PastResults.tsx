@@ -34,7 +34,7 @@ export default function PastResults({ results }: PastResultsProps) {
               <span className="text-xs font-medium text-zinc-700 truncate group-hover:text-[#002b5c] transition-colors">
                 {f.homeTeam.shortName}
               </span>
-              <Image src={f.homeTeam.logo} alt="" width={16} height={16} className="h-4 w-4 object-contain" />
+              <Image src={f.homeTeam.logo} alt={`${f.homeTeam.shortName} logo`} width={16} height={16} className="h-4 w-4 object-contain" />
             </div>
 
             {/* Score */}
@@ -50,7 +50,7 @@ export default function PastResults({ results }: PastResultsProps) {
 
             {/* Away team */}
             <div className="flex items-center gap-1.5 w-[35%]">
-              <Image src={f.awayTeam.logo} alt="" width={16} height={16} className="h-4 w-4 object-contain" />
+              <Image src={f.awayTeam.logo} alt={`${f.awayTeam.shortName} logo`} width={16} height={16} className="h-4 w-4 object-contain" />
               <span className="text-xs font-medium text-zinc-700 truncate group-hover:text-[#002b5c] transition-colors">
                 {f.awayTeam.shortName}
               </span>

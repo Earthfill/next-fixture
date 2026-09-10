@@ -47,7 +47,7 @@ export default function MatchHeader({ match }: MatchHeaderProps) {
 
       {/* Meta info */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500 mb-4">
-        <span className="flex items-center gap-1">{competitionLogo && <Image src={competitionLogo} alt="" width={16} height={16} className="h-4 w-4" />}{competition}</span>
+        <span className="flex items-center gap-1">{competitionLogo && <Image src={competitionLogo} alt={`${competition} logo`} width={16} height={16} className="h-4 w-4" />}{competition}</span>
         <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{formatDate(date)}</span>
         <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{formatTime(date)}</span>
         <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{venue.name}, {venue.city}</span>
@@ -62,7 +62,7 @@ export default function MatchHeader({ match }: MatchHeaderProps) {
         </div>
         <div className="flex items-center justify-center gap-6 py-4 flex-1">
           <div className="flex items-center gap-2">
-            <Image src={homeTeam.logo} alt={homeTeam.name} width={36} height={36} className="sm-crest-lg" />
+            <Image src={homeTeam.logo} alt={`${homeTeam.name} logo`} width={36} height={36} className="sm-crest-lg" />
             <span className="text-sm font-bold text-zinc-800">{homeTeam.name}</span>
             {match.score ? <span className={`${homeWin ? 'font-bold text-zinc-800' : ''}`}>{match.score.home}</span> : <span className="text-[10px] uppercase text-zinc-400 ml-1">(H)</span>}
           </div>
@@ -72,7 +72,7 @@ export default function MatchHeader({ match }: MatchHeaderProps) {
           <div className="flex items-center gap-2">
             {match.score ? <span className={`${awayWin ? 'font-bold text-zinc-800' : ''}`}>{match.score.away}</span> : <span className="text-[10px] uppercase text-zinc-400 mr-1">(A)</span>}
             <span className="text-sm font-bold text-zinc-800">{awayTeam.name}</span>
-            <Image src={awayTeam.logo} alt={awayTeam.name} width={36} height={36} className="sm-crest-lg" />
+            <Image src={awayTeam.logo} alt={`${awayTeam.name} logo`} width={36} height={36} className="sm-crest-lg" />
           </div>
         </div>
       </div>

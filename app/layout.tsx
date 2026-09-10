@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     template: "%s | Next Fixture",
   },
   description:
-    "In-depth football match previews, score predictions, betting tips, tactical analysis, head-to-head statistics and odds for the Premier League, La Liga, Serie A and Bundesliga. Expert football analysis daily.",
+    "In-depth football previews, score predictions and betting tips for the Premier League, La Liga, Serie A and Bundesliga.",
   alternates: {
     canonical: "/",
   },
