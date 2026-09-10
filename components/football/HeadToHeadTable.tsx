@@ -4,6 +4,10 @@
 import type { HeadToHeadMatch } from "@/lib/sports-api";
 
 export default function HeadToHeadTable({ matches, homeTeam, awayTeam }: { matches: HeadToHeadMatch[]; homeTeam: string; awayTeam: string }) {
+  // Hide the whole section when there's no H2H data (e.g. a provider that can't
+  // serve it) instead of rendering an empty "0 wins / 0 draws" table.
+  if (!matches || matches.length === 0) return null;
+
   const homeWins = matches.filter(m => 
     (m.homeTeam.toLowerCase() === homeTeam.toLowerCase() && m.homeScore > m.awayScore) ||
     (m.awayTeam.toLowerCase() === homeTeam.toLowerCase() && m.awayScore > m.homeScore)

@@ -115,15 +115,6 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
   const alignedAnalysis = generateNlgAnalysis(
     fixture.homeTeam.name, fixture.awayTeam.name, fixture.competition,
     homeForm, awayForm, headToHead,
-    {
-      tip,
-      homeScore: predictedScore.home,
-      awayScore: predictedScore.away,
-      confidence: prediction?.confidence ?? predictionResult.confidence,
-      homeWin,
-      draw,
-      awayWin,
-    }
   );
 
   // Admin-written preview text replaces the generated analysis entirely.

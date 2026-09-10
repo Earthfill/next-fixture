@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getPredictedLineup } from "@/lib/lineup-service";
+import { apiFetch } from "@/lib/football/api";
 
 // Revalidate every 5 minutes as kickoff approaches
 export const revalidate = 300;
@@ -83,21 +84,16 @@ interface FixtureMeta {
 }
 
 async function fetchFixtureMeta(fixtureId: number): Promise<FixtureMeta | null> {
-  const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
-  if (!RAPIDAPI_KEY) return null;
-
-  const res = await fetch(
-    `https://v3.football.api-sports.io/fixtures?id=${fixtureId}`,
-    {
-      headers: { "x-apisports-key": RAPIDAPI_KEY } as HeadersInit,
-      next: { revalidate: 3600, tags: ["lineups"] },
-    }
-  );
-
-  if (!res.ok) return null;
-  const json = await res.json();
-  const fixture = json?.response?.[0];
-  if (!fixture) return null;
+  // Route through the active provider so the lineups route honours the admin's
+  // provider switch instead of hardcoding the API-Football host.
+  const data = await apiFetch<{
+    response: {
+      teams: { home: { id: number; name: string }; away: { id: number; name: string } };
+      fixture: { date: string };
+    }[];
+  }>(`/fixtures?id=${fixtureId}`);
+  const fixture = data?.response?.[0];
+  if (!fixture?.teams?.home?.name || !fixture?.teams?.away?.name) return null;
 
   return {
     homeTeamId: fixture.teams.home.id,

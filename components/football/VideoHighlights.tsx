@@ -33,14 +33,19 @@ export default function VideoHighlights({ videos }: VideoHighlightsProps) {
         />
       </div>
 
-      {/* Thumbnail grid for other videos */}
+      {/* Thumbnail grid for other videos.
+          The active video renders above, so "rest" are the non-active ones.
+          Desktop shows all; mobile caps at 3 total (1 active + 2 thumbnails) by
+          hiding the 3rd+ thumbnail on small screens (< sm). */}
       {rest.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {rest.map((video) => (
+          {rest.map((video, i) => (
             <button
               key={video.videoId}
               onClick={() => setActiveVideo(video)}
-              className="group block w-full text-left overflow-hidden rounded-sm bg-zinc-100 cursor-pointer"
+              className={`group block w-full text-left overflow-hidden rounded-sm bg-zinc-100 cursor-pointer ${
+                i >= 2 ? "hidden sm:block" : ""
+              }`}
             >
               <div className="aspect-video relative overflow-hidden">
                 <Image

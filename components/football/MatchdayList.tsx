@@ -97,36 +97,27 @@ export default function MatchdayList({ matchdays }: Props) {
         return (
           <section key={matchday.date}>
             {/* Collapsible date heading + link to dedicated date page */}
-            <div className="flex gap-3">
-              <button
-                onClick={() => toggleDay(matchday.slug)}
-                className="flex-1 text-left cursor-pointer"
-              >
-                <h2 className="text-base font-bold text-zinc-800 flex items-center gap-2 hover:text-[#002b5c] transition-colors">
-                  <span className="inline-block w-2 h-2 rounded-full bg-[#002b5c]" />
-                  {formatDateLabel(matchday.date)}
-                  <span className="text-xs font-normal text-zinc-400">
-                    <span>
-                      ({matchday.fixtureCount})
-                    </span>
-                    <span className="ml-0.5 hidden md:inline-block">
-                      match{matchday.fixtureCount !== 1 ? "es" : ""}
-                    </span>
+            <button
+              onClick={() => toggleDay(matchday.slug)}
+              className="flex-1 text-left cursor-pointer"
+            >
+              <h2 className="text-base font-bold text-zinc-800 flex items-center gap-2 hover:text-[#002b5c] transition-colors">
+                <span className="inline-block w-2 h-2 rounded-full bg-[#002b5c]" />
+                {formatDateLabel(matchday.date)}
+                <span className="text-xs font-normal text-zinc-400">
+                  <span>
+                    ({matchday.fixtureCount})
                   </span>
-                  <ChevronDown
-                    className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${isOpen ? "rotate-0" : "-rotate-90"
-                      } animate-bounce`}
-                  />
-                </h2>
-              </button>
-              <Link
-                href={`/fixtures/${matchday.slug}`}
-                prefetch={false}
-                className="flex shrink-0 items-center gap-1 rounded-md border border-zinc-200 px-2.5 py-1.5 text-[11px] font-medium text-[#002b5c] hover:bg-zinc-50 transition-colors mt-0.5"
-              >
-                All fixtures <ChevronRight className="h-3 w-3" />
-              </Link>
-            </div>
+                  <span className="ml-0.5 hidden md:inline-block">
+                    match{matchday.fixtureCount !== 1 ? "es" : ""}
+                  </span>
+                </span>
+                <ChevronDown
+                  className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${isOpen ? "rotate-0" : "-rotate-90"
+                    } animate-bounce`}
+                />
+              </h2>
+            </button>
 
             {/* League sections — collapsible */}
             <div

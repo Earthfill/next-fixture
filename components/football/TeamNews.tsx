@@ -11,11 +11,17 @@ interface PlayerNews {
 
 export default function TeamNews({ homeTeam, awayTeam, homeNews, awayNews, lineups }: { homeTeam: string; awayTeam: string; homeNews: PlayerNews[]; awayNews: PlayerNews[]; lineups: any[] }) {
 
+  // Hide the whole section when neither a usable lineup nor any injury news
+  // exists (e.g. a provider that can't serve them) — never render a bare heading.
+  const hasLineups = lineups.length > 0 && lineups.some((l) => l.startXI && l.startXI.length > 0);
+  const hasNews = homeNews.length > 0 || awayNews.length > 0;
+  if (!hasLineups && !hasNews) return null;
+
   return (
     <div>
       <h2 className="sm-section-heading">Team News</h2>
 
-      {lineups.length > 0 && lineups.some((l) => l.startXI && l.startXI.length > 0) && (
+      {hasLineups && (
         <LineupDisplay lineups={lineups} />
       )}
 

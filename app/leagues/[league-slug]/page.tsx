@@ -57,7 +57,8 @@ export default async function LeaguePage({ params }: { params: Promise<{ "league
   const { articles: news } = await getFootballNews();
   const pastResults = await getPastResults(s, 12);
 
-  // Fetch YouTube highlights for top goal-scoring matches
+  // Fetch YouTube highlights for top goal-scoring matches.
+  // Desktop shows 4; mobile caps at 3 (VideoHighlights hides extras on small screens).
   const topMatches = pastResults
     .filter((m) => m.score)
     .sort((a, b) => (b.score!.home + b.score!.away) - (a.score!.home + a.score!.away))
@@ -140,7 +141,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ "league
 
           {/* Video Highlights — under Past Results on large screens */}
           {highlights.length > 0 && (
-            <div className="mt-8 hidden lg:block">
+            <div className="mt-8">
               <VideoHighlights videos={highlights} />
             </div>
           )}

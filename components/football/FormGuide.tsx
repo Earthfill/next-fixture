@@ -15,6 +15,9 @@ function formatExtra(match: TeamForm["recentMatches"][0]): string {
 }
 
 export default function FormGuide({ form }: { form: TeamForm }) {
+  // Hide the guide when there's no form data rather than show an empty badge row.
+  if (!form.results || form.results.length === 0) return null;
+
   return (
     <div>
       <h3 className="text-sm font-bold text-zinc-800 mb-2">{form.teamName} — Last 5 Matches</h3>

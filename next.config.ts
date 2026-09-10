@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: 'https', hostname: 'media.api-sports.io' },
       { protocol: 'https', hostname: 'media-*.api-sports.io' },
+      { protocol: 'https', hostname: 'highlightly.net' },
       { protocol: 'https', hostname: 'upload.wikimedia.org' },
       { protocol: 'https', hostname: 'crests.football-data.org' },
       { protocol: 'https', hostname: 'i.ytimg.com' },

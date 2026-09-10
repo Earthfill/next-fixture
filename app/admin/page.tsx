@@ -9,11 +9,13 @@ import { getUpcomingFixturesFresh } from "@/lib/cache/pages";
 import { buildAvailableMatchdays } from "@/lib/football/service";
 import { getOverriddenSlugs } from "@/lib/admin-overrides";
 import { getHiddenSlugs } from "@/lib/hidden-fixtures";
+import { PROVIDER_IDS, PROVIDER_META, getActiveProviderId, providerHasKey } from "@/lib/football/providers";
 import JobRunner from "@/components/admin/JobRunner";
 import FixtureList from "@/components/admin/FixtureList";
+import ProviderControl from "@/components/admin/ProviderControl";
 import {
   Trophy, Calendar, BarChart3, RefreshCw, ExternalLink,
-  DollarSign, Eye, Pencil, PenLine, CalendarDays, Sparkles,
+  DollarSign, Eye, Pencil, PenLine, CalendarDays, Sparkles, Server,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +51,14 @@ export default async function AdminPage() {
   // Hidden count scoped to the fixtures currently in this table (hidden slugs
   // for long-finished matches may linger in the store).
   const totalHidden = fixtures.filter((f) => hiddenSlugs.has(f.slug)).length;
+
+  // Active sports data provider + each provider's key status (for the switch UI).
+  const activeProvider = await getActiveProviderId();
+  const providerOptions = PROVIDER_IDS.map((id) => ({
+    id,
+    label: PROVIDER_META[id].label,
+    keyConfigured: providerHasKey(id),
+  }));
 
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8">
@@ -111,6 +121,28 @@ export default async function AdminPage() {
           </div>
           <p className="text-2xl font-bold leading-none text-zinc-900">{totalEdited}</p>
           <p className="mt-1.5 text-xs font-medium text-zinc-500">Edited Previews</p>
+        </div>
+      </div>
+
+      {/* Data Provider */}
+      <div className="mb-8 rounded-xl border border-zinc-200 bg-white shadow-sm">
+        <div className="flex items-center gap-3 border-b border-zinc-100 px-5 py-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+            <Server className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-zinc-900">Data Provider</h2>
+            <p className="text-xs text-zinc-500">
+              Switch between API-Football and Highlightly — useful when a daily quota is exhausted
+            </p>
+          </div>
+        </div>
+        <div className="px-5 py-4">
+          <ProviderControl
+            token={adminToken as string}
+            active={activeProvider}
+            providers={providerOptions}
+          />
         </div>
       </div>
 

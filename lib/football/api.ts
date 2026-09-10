@@ -6,10 +6,13 @@
 // ---------------------------------------------------------------------------
 
 import { isCircuitOpen, recordFailure, recordSuccess } from "@/lib/football/circuit-breaker";
-
-const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
-const RAPIDAPI_HOST = process.env.API_FOOTBALL_HOST;
-const API_BASE = "https://" + RAPIDAPI_HOST;
+import {
+  getActiveProviderId,
+  getProviderConfig,
+  providerHasKey,
+  syncProviderId,
+} from "@/lib/football/providers";
+import { hlFetch } from "@/lib/football/highlightly";
 
 // Per-attempt timeout  never let a hanging DNS/TCP hold the request forever.
 const FETCH_TIMEOUT_MS = 10_000;
@@ -47,7 +50,12 @@ const TRANSIENT_CODES = new Set([
 let lastQuota: { limit: number; used: number; remaining: number } | null = null;
 
 export function hasApi(): boolean {
-  return Boolean(RAPIDAPI_KEY);
+  const id = syncProviderId();
+  if (providerHasKey(id)) return true;
+  // Cold-start safety: until the async resolver warms the cache from Postgres,
+  // accept the OTHER configured provider so `hasApi()` never wrongly reads
+  // "no API" and suppresses data right after an admin switch.
+  return providerHasKey(id === "rapid" ? "highlightly" : "rapid");
 }
 
 /** Returns the last observed quota/rate-limit usage, or null if unknown yet. */
@@ -60,34 +68,48 @@ const dedupCache = new Map<string, Promise<any>>();
 
 //  Public fetch function 
 export async function apiFetch<T>(path: string): Promise<T | null> {
-  if (!RAPIDAPI_KEY) return null;
+  // Resolve the active provider (rapid | highlightly) from Postgres/env, and
+  // dedupe per (provider, path) so an admin switch can't mix request contexts.
+  const provider = await getActiveProviderId();
+  if (!providerHasKey(provider)) return null;
 
-  // Deduplicate concurrent calls within the same request
-  if (dedupCache.has(path)) {
-    return dedupCache.get(path)! as Promise<T | null>;
+  const dedupKey = `${provider}:${path}`;
+  if (dedupCache.has(dedupKey)) {
+    return dedupCache.get(dedupKey)! as Promise<T | null>;
   }
 
   const promise = (async () => {
-    if (await isCircuitOpen()) {
+    // The circuit breaker is API-Football-specific. Only gate/provider-trip it
+    // for the "rapid" provider — when the admin flips to highlightly precisely
+    // because rapid was failing, we must NOT carry an open breaker over.
+    if (provider === "rapid" && (await isCircuitOpen())) {
       console.warn("[api-football] circuit breaker open - short-circuiting request");
       return null;
     }
     try {
       await acquireRateSlot(); // throttle: stay under the per-minute limit
-      const result = await fetchWithRetry<T>(path);
-      if (result === null) {
-        await recordFailure();
-      } else {
-        await recordSuccess();
+      const config = getProviderConfig(provider);
+
+      const result =
+        provider === "highlightly"
+          ? (hlFetch(path, config) as Promise<T | null>)
+          : await fetchWithRetry<T>(path, config);
+
+      // Only the API-Football provider drives the shared circuit breaker.
+      if (provider === "rapid") {
+        if (result === null) {
+          await recordFailure();
+        } else {
+          await recordSuccess();
+        }
       }
       return result;
     } catch {
-      await recordFailure();
       return null;
     }
   })();
-  dedupCache.set(path, promise);
-  promise.finally(() => dedupCache.delete(path));
+  dedupCache.set(dedupKey, promise);
+  promise.finally(() => dedupCache.delete(dedupKey));
 
   return promise;
 }
@@ -142,11 +164,11 @@ async function acquireRateSlot(): Promise<void> {
   }
 }
 
-async function fetchWithRetry<T>(path: string): Promise<T | null> {
+async function fetchWithRetry<T>(path: string, cfg: { base: string; authHeaders: Record<string, string> }): Promise<T | null> {
   for (let attempt =  0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
-      const res = await fetch(`${API_BASE}${path}`, {
-        headers: { "x-apisports-key": RAPIDAPI_KEY! } as HeadersInit,
+      const res = await fetch(`${cfg.base}${path}`, {
+        headers: cfg.authHeaders as HeadersInit,
         cache: "no-store",
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });

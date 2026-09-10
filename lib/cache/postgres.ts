@@ -312,3 +312,44 @@ export async function pgHiddenRemove(slug: string): Promise<boolean> {
     return false;
   }
 }
+
+// ---------- App settings (key/value — active provider, etc.) ------------
+// Separate table (never bulk-cleared) so an admin runtime setting survives the
+// "Clear Cache" job. Postgres is the single source of truth; callers keep an
+// in-memory fallback for no-PG (dev/standalone) environments.
+
+const SETTINGS_TABLE = "app_settings";
+
+/** Read a raw app setting, or null when absent/unavailable. */
+export async function pgSettingGet(key: string): Promise<string | null> {
+  await initPostgres();
+  if (!pool || !available) return null;
+  try {
+    const res = await pool.query(
+      `SELECT value FROM "${SETTINGS_TABLE}" WHERE key = $1`,
+      [key]
+    );
+    return res.rows[0]?.value ?? null;
+  } catch (err) {
+    console.warn("[settings:pg] get failed:", (err as Error).message);
+    return null;
+  }
+}
+
+/** Upsert an app setting. Returns true when committed. */
+export async function pgSettingSet(key: string, value: string): Promise<boolean> {
+  await initPostgres();
+  if (!pool || !available) return false;
+  try {
+    await pool.query(
+      `INSERT INTO "${SETTINGS_TABLE}" (key, value, updated_at)
+       VALUES ($1, $2, now())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [key, value]
+    );
+    return true;
+  } catch (err) {
+    console.warn("[settings:pg] set failed:", (err as Error).message);
+    return false;
+  }
+}

@@ -7,11 +7,12 @@ import type {
   MatchPreview, LeagueData, FixtureGroup, MatchdayGroup, PredictionData, TopScorer, PlayerNews,
 } from "@/lib/types";
 import { apiFetch, hasApi } from "@/lib/football/api";
+import { getActiveProviderId } from "@/lib/football/providers";
 import { loadTeams, loadH2H } from "@/lib/football/local";
 import { buildPrediction, generateAnalysis } from "@/lib/football/analysis";
 import {
   LEAGUE_IDS, LEAGUE_ID_TO_NAME, COMPETITION_LOGOS, COMPETITION_SLUGS,
-  SLUG_TO_LEAGUE_ID, LEAGUE_ORDER, generateSlug, parseSlug, normalizeName,
+  LEAGUE_ORDER, generateSlug, parseSlug, normalizeName,
 } from "@/lib/football/config";
 import { toSiteDate } from "@/lib/dates";
 import { redisGet, redisSet, redisDel } from "@/lib/cache/redis";
@@ -24,6 +25,7 @@ const COVERED_LEAGUES_TTL = 24 * 60 * 60; // 24h — season/year data changes ra
 interface CoveredLeague {
   id: number;
   name: string;
+  slug: string;
   season: number;
   hasFixtures: boolean;
   hasStandings: boolean;
@@ -32,12 +34,35 @@ interface CoveredLeague {
   hasPredictions: boolean;
 }
 
+// Tracked competitions, keyed by normalized name — used to resolve league ids
+// for PROVIDER id spaces (rapid api-sports ids vs highlightly ids) via the name.
+const TRACKED_LEAGUES = Object.keys(LEAGUE_IDS).map((name) => ({
+  normalized: normalizeName(name),
+  name,
+  slug: COMPETITION_SLUGS[name],
+}));
+
+function matchTrackedLeague(providerName: string) {
+  const n = normalizeName(providerName);
+  if (!n) return null;
+  return (
+    TRACKED_LEAGUES.find(
+      (t) => n === t.normalized || n.includes(t.normalized) || t.normalized.includes(n)
+    ) || null
+  );
+}
+
 let coveredLeaguesCache: CoveredLeague[] | null = null;
 
 async function getCoveredLeagues(): Promise<CoveredLeague[]> {
   if (coveredLeaguesCache) return coveredLeaguesCache;
 
   if (!hasApi()) return [];
+
+  // Resolve the active provider first — it decides how /leagues is matched
+  // (rapid: filter by api-sports ids; highlightly: filter by normalized name).
+  const provider = await getActiveProviderId();
+  const isHl = provider === "highlightly";
 
   // Serve from Redis when warm. `/leagues?current=true` returns 1000+ leagues
   // (a very large payload) and, because `coveredLeaguesCache` is in-memory only,
@@ -57,29 +82,40 @@ async function getCoveredLeagues(): Promise<CoveredLeague[]> {
   const data = await apiFetch<{ response: any[] }>("/leagues?current=true");
   if (!data?.response?.length) return [];
 
-  // Filter to only the leagues we track (by slug/name)
-  const ourLeagueIds = new Set(Object.values(LEAGUE_IDS));
-
   coveredLeaguesCache = data.response
-    .filter((entry: any) => {
-      const leagueId = entry.league?.id;
-      return ourLeagueIds.has(leagueId);
-    })
-    .map((entry: any) => {
-      const league = entry.league;
+    .map((entry: any): CoveredLeague | null => {
+      const entryName = entry.league?.name || "";
+
+      // Resolve this entry to one of OUR tracked leagues, in the provider's
+      // own id space (rapid: by api-sports id; highlightly: by name).
+      let matched: { name: string; slug: string } | null = null;
+      if (isHl) {
+        matched = matchTrackedLeague(entryName);
+      } else if (LEAGUE_ID_TO_NAME[entry.league?.id]) {
+        const name = LEAGUE_ID_TO_NAME[entry.league?.id];
+        matched = { name, slug: COMPETITION_SLUGS[name] };
+      }
+      if (!matched) return null;
+
       const seasons = entry.seasons || [];
       const currentSeason = seasons.find((s: any) => s.current === true) || seasons[0] || {};
       const coverage = currentSeason.coverage || {};
+
       return {
-        id: league.id,
-        name: league.name,
+        id: entry.league.id,
+        name: matched.name,
+        slug: matched.slug,
         season: currentSeason.year || 0,
-        hasFixtures: coverage.fixtures?.events || false,
-        hasStandings: coverage.standings || false,
-        hasTopScorers: coverage.top_scorers || false, hasTopAssists: coverage.top_assists || false,
-        hasPredictions: coverage.predictions || false,
+        // highlightly's Basic tier can't fetch scorers/predictions — mark only
+        // the features it actually serves so callers know what's available.
+        hasFixtures: isHl ? true : coverage.fixtures?.events || false,
+        hasStandings: isHl ? true : coverage.standings || false,
+        hasTopScorers: isHl ? false : coverage.top_scorers || false,
+        hasTopAssists: isHl ? false : coverage.top_assists || false,
+        hasPredictions: isHl ? false : coverage.predictions || false,
       };
-    });
+    })
+    .filter((l: CoveredLeague | null): l is CoveredLeague => l !== null);
 
   await redisSet(COVERED_LEAGUES_KEY, JSON.stringify(coveredLeaguesCache), COVERED_LEAGUES_TTL).catch(() => false);
 
@@ -196,20 +232,19 @@ export async function getFixturesByDateGroupedByLeague(date?: string): Promise<M
 }
 
 export async function getLeagueStandings(leagueSlug: string): Promise<LeagueData | null> {
-  const leagueId = SLUG_TO_LEAGUE_ID[leagueSlug];
-  if (!leagueId || !hasApi()) return null;
+  if (!hasApi()) return null;
 
   const leagues = await getCoveredLeagues();
-  const league = leagues.find((l) => l.id === leagueId);
+  const league = leagues.find((l) => l.slug === leagueSlug);
   if (!league) return null;
 
-  const season = league?.season;
+  const season = league.season;
   if (!season) return null;
 
-  const name = LEAGUE_ID_TO_NAME[leagueId] || leagueSlug;
+  const name = league.name;
 
   const data = await apiFetch<{ response: { league: { standings: any[][] } }[] }>(
-    `/standings?league=${leagueId}&season=${season}`
+    `/standings?league=${league.id}&season=${season}`
   );
   // API-Football returns one `standings` entry per stage: the league/group
   // table AND the knockout rounds (Round of 16, Quarter-finals, Final, ...).
@@ -410,15 +445,14 @@ export async function getHeadToHead(teamA: string, teamB: string): Promise<HeadT
 }
 
 export async function getTopScorers(leagueSlug: string, limit: number = 10): Promise<TopScorer[]> {
-  const leagueId = SLUG_TO_LEAGUE_ID[leagueSlug];
-  if (!leagueId || !hasApi()) return [];
+  if (!hasApi()) return [];
 
   const leagues = await getCoveredLeagues();
-  const league = leagues.find((l) => l.id === leagueId);
+  const league = leagues.find((l) => l.slug === leagueSlug);
   if (!league) return [];
 
-  const season = league?.season;
-  const data = await apiFetch<any>(`/players/topscorers?league=${leagueId}&season=${season}`);
+  const season = league.season;
+  const data = await apiFetch<any>(`/players/topscorers?league=${league.id}&season=${season}`);
   if (!data?.response?.length) return [];
 
   return data.response.slice(0, limit).map((s: any, i: number) => ({
@@ -433,15 +467,14 @@ export async function getTopScorers(leagueSlug: string, limit: number = 10): Pro
 }
 
 export async function getTopAssists(leagueSlug: string, limit: number = 10): Promise<TopScorer[]> {
-  const leagueId = SLUG_TO_LEAGUE_ID[leagueSlug];
-  if (!leagueId || !hasApi()) return [];
+  if (!hasApi()) return [];
 
   const leagues = await getCoveredLeagues();
-  const league = leagues.find((l) => l.id === leagueId);
+  const league = leagues.find((l) => l.slug === leagueSlug);
   if (!league) return [];
 
-  const season = league?.season;
-  const data = await apiFetch<any>(`/players/topassists?league=${leagueId}&season=${season}`);
+  const season = league.season;
+  const data = await apiFetch<any>(`/players/topassists?league=${league.id}&season=${season}`);
   if (!data?.response?.length) return [];
 
   return data.response.slice(0, limit).map((s: any, i: number) => ({
@@ -456,21 +489,24 @@ export async function getTopAssists(leagueSlug: string, limit: number = 10): Pro
 }
 
 export async function getPastResults(leagueSlug: string, limit: number = 10): Promise<Fixture[]> {
-  const leagueId = SLUG_TO_LEAGUE_ID[leagueSlug];
-  if (!leagueId || !hasApi()) return [];
+  if (!hasApi()) return [];
 
   const leagues = await getCoveredLeagues();
-  const league = leagues.find((l) => l.id === leagueId);
+  const league = leagues.find((l) => l.slug === leagueSlug);
   const season = league?.season;
   if (!season) return [];
 
   const today = toSiteDate(new Date());
+  // Widen the window to 3 weeks (21 days) so league/match highlights from the last
+  // few matchdays are still surfaced — a strict 7-day window left leagues like
+  // Ligue 2 empty of recent results (and therefore empty of highlights) whenever a
+  // week had no finished fixtures.
   const pastDate = new Date();
-  pastDate.setDate(pastDate.getDate() - 7);
+  pastDate.setDate(pastDate.getDate() - 21);
   const from = toSiteDate(pastDate);
 
   const data = await apiFetch<{ response: any[] }>(
-    `/fixtures?league=${leagueId}&season=${season}&from=${from}&to=${today}&status=ft`
+    `/fixtures?league=${league.id}&season=${season}&from=${from}&to=${today}&status=ft`
   );
   if (!data?.response?.length) return [];
 
@@ -514,7 +550,7 @@ export async function fetchFixturesForRange(
   const leagues = await getCoveredLeagues();
   let targets = leagues;
   if (leagueSlug) {
-    targets = leagues.filter((l) => COMPETITION_SLUGS[LEAGUE_ID_TO_NAME[l.id] || ""] === leagueSlug);
+    targets = leagues.filter((l) => l.slug === leagueSlug);
   }
 
   const allFixtures: Fixture[] = [];

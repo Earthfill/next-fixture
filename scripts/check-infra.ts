@@ -37,10 +37,14 @@ function parseHostPort(url: string, fallbackPort: number): { host: string; port:
 const API_HOST = process.env.API_FOOTBALL_HOST as string;
 const REDIS_URL = process.env.REDIS_URL as string;
 const PG_URL = process.env.DATABASE_URL as string;
+const HL_HOST = (process.env.HIGHLIGHTLY_HOST as string) || "sports.highlightly.net";
 
 const targets: Target[] = [
   { name: "API-Football", url: `https://${API_HOST}`, host: API_HOST, port: 443 },
 ];
+if (process.env.HIGHLIGHTLY_API_KEY) {
+  targets.push({ name: "Highlightly", url: `https://${HL_HOST}`, host: HL_HOST, port: 443 });
+}
 
 const redis = parseHostPort(REDIS_URL, 6379);
 if (redis) targets.push({ name: "Upstash Redis", url: REDIS_URL, host: redis.host, port: redis.port, tls: REDIS_URL.startsWith("rediss://") });
@@ -120,6 +124,20 @@ async function main(): Promise<void> {
         console.log(`  HTTP:   GET /status -> ${res.status}`);
       } catch (err) {
         console.log(`  HTTP:   GET /status FAIL -> ${(err as Error).message}`);
+      }
+    }
+    if (t.name === "Highlightly") {
+      try {
+        const res = await fetch(`https://${HL_HOST}/football/leagues`, {
+          headers: {
+            "x-rapidapi-key": process.env.HIGHLIGHTLY_API_KEY as string,
+            "x-rapidapi-host": HL_HOST,
+          } as HeadersInit,
+          signal: AbortSignal.timeout(8000),
+        });
+        console.log(`  HTTP:   GET /football/leagues -> ${res.status}`);
+      } catch (err) {
+        console.log(`  HTTP:   GET /football/leagues FAIL -> ${(err as Error).message}`);
       }
     }
   }

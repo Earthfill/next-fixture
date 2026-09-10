@@ -98,10 +98,10 @@ const FORM_OPENERS: FormSentence[] = [
   (t, f) => `${t} come into this on the back of ${f.isStreak && f.streakType === "W" ? `an impressive ${f.streakLength}-match winning run` : f.isStreak && f.streakType === "L" ? `a difficult run of ${f.streakLength} consecutive defeats` : f.isStreak && f.streakType === "D" ? `a steady run of ${f.streakLength} draws` : `a mixed run of form`}, having taken ${f.points} points from their last ${f.wins + f.draws + f.losses} matches.`,
   (t, f) => `${t} are ${f.label === "flying" ? "in impressive form" : f.label === "strong" ? "enjoying a solid spell" : f.label === "poor" ? "going through a rough patch" : f.label === "struggling" ? "finding things difficult" : "experiencing a mixed run"} with ${f.wins} wins, ${f.draws} draws and ${f.losses} defeats from their last ${f.wins + f.draws + f.losses} outings.`,
   (t, f) => `Recent form suggests ${t} are ${f.label === "flying" ? "in red-hot form" : f.label === "strong" ? "on a positive trajectory" : f.label === "poor" ? "in a worrying slump" : f.label === "struggling" ? "struggling for consistency" : "hard to predict right now"} — ${f.wins} wins, ${f.draws} draws and ${f.losses} losses in their last ${f.wins + f.draws + f.losses}.`,
-  (t, f) => `${t} head into this fixture ${f.label === "flying" ? "brimming with confidence" : f.label === "strong" ? "in decent shape" : f.label === "poor" ? "low on confidence" : f.label === "struggling" ? "desperate for a turnaround" : "with mixed emotions"} after collecting ${f.points} points from a possible ${(f.wins + f.draws + f.losses) * 3} in their last ${f.wins + f.draws + f.losses}.`,
+  (t, f) => `${t} head into this fixture ${f.label === "flying" ? "brimming with belief" : f.label === "strong" ? "in decent shape" : f.label === "poor" ? "short of belief" : f.label === "struggling" ? "desperate for a turnaround" : "with mixed emotions"} after collecting ${f.points} points from a possible ${(f.wins + f.draws + f.losses) * 3} in their last ${f.wins + f.draws + f.losses}.`,
   (t, f) => `${t} arrive at this fixture ${f.label === "flying" ? "with real wind in their sails" : f.label === "strong" ? "on the back of a productive spell" : f.label === "poor" ? "searching for answers after a difficult run" : f.label === "struggling" ? "hoping a change of opponent sparks a revival" : "looking to turn decent patches into consistency"}, having picked up ${f.points} points from their last ${f.wins + f.draws + f.losses} games.`,
   (t, f) => `The numbers tell a clear story for ${t}: ${f.wins} wins, ${f.draws} draws and ${f.losses} losses in their last ${f.wins + f.draws + f.losses} outings, worth ${f.points} points — ${f.label === "flying" ? "an excellent return" : f.label === "strong" ? "a solid return" : f.label === "poor" ? "a worrying return" : f.label === "struggling" ? "a concerning return" : "a middling return"}.`,
-  (t, f) => `${t} will approach this game ${f.label === "flying" ? "with the belief of a side that can beat anyone" : f.label === "strong" ? "with quiet confidence" : f.label === "poor" ? "with confidence levels at a low ebb" : f.label === "struggling" ? "with a point to prove" : "with cautious optimism"}, after taking ${f.points} points from a possible ${(f.wins + f.draws + f.losses) * 3} in their last ${f.wins + f.draws + f.losses}.`,
+  (t, f) => `${t} will approach this game ${f.label === "flying" ? "with the belief of a side that can beat anyone" : f.label === "strong" ? "with quiet assurance" : f.label === "poor" ? "with belief at a low ebb" : f.label === "struggling" ? "with a point to prove" : "with cautious optimism"}, after taking ${f.points} points from a possible ${(f.wins + f.draws + f.losses) * 3} in their last ${f.wins + f.draws + f.losses}.`,
 ];
 
 const FORM_GOAL_ATTACK: FormSentence[] = [
@@ -117,7 +117,7 @@ const STREAK_SENTENCES: FormSentence[] = [
   (t, f) => `Notably, ${t} are on a ${f.streakLength}-match ${f.streakType === "W" ? "winning" : f.streakType === "L" ? "losing" : "unbeaten"} streak, which ${f.streakType === "W" ? "will fill them with belief" : "they will be desperate to end"} heading into this contest.`,
   (t, f) => `The momentum is ${f.streakType === "W" ? "firmly with" : "against"} ${t} right now — they have ${f.streakType === "W" ? "won" : f.streakType === "L" ? "lost" : "drawn"} their last ${f.streakLength} matches.`,
   (t, f) => `${t}'s recent run of ${f.streakLength} ${f.streakType === "W" ? "victories" : f.streakType === "L" ? "defeats" : "draws"} ${f.streakType === "W" ? "highlights their current momentum" : "will be a concern for the management"}.`,
-  (t, f) => `${f.streakType === "W" ? `${t} will be riding a wave of confidence on their current ${f.streakLength}-game surge` : f.streakType === "L" ? `Stopping the rot of ${f.streakLength} straight defeats will be top of ${t}'s priority list` : `${t} will be eager to turn their run of ${f.streakLength} draws into something more tangible`}.`,
+  (t, f) => `${f.streakType === "W" ? `${t} will be riding a wave of momentum on their current ${f.streakLength}-game surge` : f.streakType === "L" ? `Stopping the rot of ${f.streakLength} straight defeats will be top of ${t}'s priority list` : `${t} will be eager to turn their run of ${f.streakLength} draws into something more tangible`}.`,
   (t, f) => `The recent sequence — ${f.streakType === "W" ? `${f.streakLength} consecutive wins` : f.streakType === "L" ? `${f.streakLength} losses on the trot` : `${f.streakLength} straight draws`} — ${f.streakType === "W" ? "gives this camp real momentum" : f.streakType === "L" ? "leaves this camp searching for solutions" : "underlines how finely balanced they currently are"}.`,
 ];
 
@@ -225,7 +225,7 @@ const PREDICTION_OPENERS = [
   (h: string, a: string, hf: FormSummary, af: FormSummary) => {
     const diff = hf.points - af.points;
     if (diff >= 6) return `${h} will be confident of continuing their strong run, and the statistics suggest they have the edge here.`;
-    if (diff <= -6) return `${a} will travel with confidence given their recent results, and they will believe they can get a positive result.`;
+    if (diff <= -6) return `${a} will travel with belief given their recent results, and they will back themselves to get a positive result.`;
     return `With both sides showing flashes of quality, this could go either way. The team that executes their game plan better will prevail.`;
   },
   (h: string, a: string) => `Fans can expect a competitive match with plenty at stake. The first goal could be crucial in shaping how the game unfolds.`,
@@ -254,8 +254,7 @@ const PREDICTION_CLOSERS: PredictionCloserSentence[] = [
 
 export function generateNlgAnalysis(
   homeTeam: string, awayTeam: string, competition: string,
-  homeForm: TeamForm, awayForm: TeamForm, headToHead: HeadToHeadMatch[],
-  predictionContext?: { tip: string; homeScore: number; awayScore: number; confidence: number; homeWin: number; draw: number; awayWin: number }
+  homeForm: TeamForm, awayForm: TeamForm, headToHead: HeadToHeadMatch[]
 ): string {
   const seed = seededHash(homeTeam, awayTeam, competition);
   const hf = analyzeForm(homeForm);
@@ -320,39 +319,18 @@ export function generateNlgAnalysis(
   }
   paragraphs.push(p3.join(" "));
 
-  // Paragraph 4: Prediction / outlook — aligned with the actual betting tip
+  // Paragraph 4: Prediction / outlook
   const p4: string[] = [];
-  if (predictionContext) {
-    const { tip, homeScore, awayScore, confidence, homeWin, draw, awayWin } = predictionContext;
-    const tipLower = tip.toLowerCase();
-    if (tipLower.includes("home win")) {
-      p4.push(`The data points towards a home victory, with the data giving ${homeTeam} a ${homeWin}% chance of winning. A ${homeScore}-${awayScore} scoreline is the most likely outcome based on the expected goal figures.`);
-    } else if (tipLower.includes("away win")) {
-      p4.push(`The balance of play favours the visitors, with ${awayTeam} given a ${awayWin}% chance of taking all three points. The most probable scoreline stands at ${homeScore}-${awayScore}.`);
-    } else {
-      p4.push(`This is a closely contested fixture, with the data suggesting a draw (${draw}%) is the most likely outcome. The predicted scoreline of ${homeScore}-${awayScore} reflects the evenly matched nature of the contest.`);
-    }
-    const confPct = Math.round(confidence);
-    p4.push(
-      confPct >= 75
-        ? `Our level of conviction stands at ${confPct}%, with the analysis strongly behind this prediction.`
-        : confPct >= 55
-          ? `There is reasonable confidence (${confPct}%) behind this prediction, though it is far from a certainty.`
-          : `Confidence here is modest at ${confPct}%, reflecting just how hard this fixture is to call.`
-    );
-    p4.push(pick(PREDICTION_CLOSERS, seed, 19)(competition));
+  p4.push(pick(PREDICTION_OPENERS, seed, 16)(homeTeam, awayTeam, hf, af, h2h));
+  const ptsDiff = Math.abs(hf.points - af.points);
+  if (ptsDiff >= 6) {
+    p4.push("The form guide points clearly in one direction, but football has a habit of defying expectations.");
+  } else if (ptsDiff >= 3) {
+    p4.push("The team in better form holds a slight edge, but this is far from a foregone conclusion.");
   } else {
-    p4.push(pick(PREDICTION_OPENERS, seed, 16)(homeTeam, awayTeam, hf, af, h2h));
-    const ptsDiff = Math.abs(hf.points - af.points);
-    if (ptsDiff >= 6) {
-      p4.push("The form guide points clearly in one direction, but football has a habit of defying expectations.");
-    } else if (ptsDiff >= 3) {
-      p4.push("The team in better form holds a slight edge, but this is far from a foregone conclusion.");
-    } else {
-      p4.push("With so little to separate these sides, it could come down to which team wants it more on the day.");
-    }
-    p4.push(pick(PREDICTION_CLOSERS, seed, 19)(competition));
+    p4.push("With so little to separate these sides, it could come down to which team wants it more on the day.");
   }
+  p4.push(pick(PREDICTION_CLOSERS, seed, 19)(competition));
   paragraphs.push(p4.join(" "));
 
   return paragraphs.join("\n\n");
