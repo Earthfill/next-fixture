@@ -3,7 +3,6 @@
 // ---------------------------------------------------------------------------
 
 import type { Metadata } from "next";
-import Script from "next/script";
 import { getAvailableMatchdays, getFixturesByDateGroupedByLeague } from "@/lib/cache/pages";
 import { getFootballNews } from "@/lib/news";
 import NewsSection from "@/components/football/NewsSection";
@@ -60,41 +59,47 @@ export default async function HomePage() {
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6">
       {/* JSON-LD Structured Data — an Organization block with a logo is what
-          Yandex (and Google's publisher logo) reads to show the brand in SERPs. */}
-      <Script id="site-jsonld" type="application/ld+json" strategy="afterInteractive">
-        {jsonLdScript({
-          "@context": "https://schema.org",
-          "@graph": [
-            {
-              "@type": "WebSite",
-              name: "Next Fixture",
-              url: SITE_URL,
-              description: "Football predictions, match previews and betting tips for Europe's top leagues.",
-              potentialAction: {
-                "@type": "SearchAction",
-                target: {
-                  "@type": "EntryPoint",
-                  urlTemplate: `${SITE_URL}/search?q={search_term_string}`,
+          Yandex (and Google's publisher logo) reads to show the brand in SERPs.
+          Rendered as a plain SSR <script> so it's present in the raw HTML that
+          non-JS crawlers (Yandex) fetch — afterInteractive next/script would
+          only inject it post-hydration and crawlers would miss it. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: jsonLdScript({
+            "@context": "https://schema.org",
+            "@graph": [
+              {
+                "@type": "WebSite",
+                name: "Next Fixture",
+                url: SITE_URL,
+                description: "Football predictions, match previews and betting tips for Europe's top leagues.",
+                potentialAction: {
+                  "@type": "SearchAction",
+                  target: {
+                    "@type": "EntryPoint",
+                    urlTemplate: `${SITE_URL}/search?q={search_term_string}`,
+                  },
+                  "query-input": "required name=search_term_string",
                 },
-                "query-input": "required name=search_term_string",
+                publisher: {
+                  "@type": "Organization",
+                  name: "Next Fixture",
+                  url: SITE_URL,
+                  logo: `${SITE_URL}/logo.png`,
+                },
               },
-              publisher: {
+              {
                 "@type": "Organization",
                 name: "Next Fixture",
                 url: SITE_URL,
                 logo: `${SITE_URL}/logo.png`,
+                image: `${SITE_URL}/logo.png`,
               },
-            },
-            {
-              "@type": "Organization",
-              name: "Next Fixture",
-              url: SITE_URL,
-              logo: `${SITE_URL}/logo.png`,
-              image: `${SITE_URL}/logo.png`,
-            },
-          ],
-        })}
-      </Script>
+            ],
+          }),
+        }}
+      />
 
       <h1 className="sm-heading-lg mb-2">
         Football Previews &amp; Predictions
