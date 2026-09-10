@@ -22,6 +22,16 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
+/** Request a larger (sharper) crop from image CDNs that encode the size in the
+ * URL. BBC iChef tacks the width into the path (…/standard/{width}/cpsprodpb/…),
+ * and the RSS thumbnails arrive as 240px — far too small for a hero, so we swap
+ * in a bigger printable size. Non-matching hosts are returned unchanged.
+ * Callers should only pass a non-null url (i.e. inside an `imageUrl ? ...` branch). */
+function boostImageUrl(url: string, size: number): string {
+  const m = url.match(/^(https:\/\/ichef\.bbci\.co\.uk\/ace\/standard\/)\d+(\/cpsprodpb\/.*)$/i);
+  return m ? `${m[1]}${size}${m[2]}` : url;
+}
+
 export default function NewsSection({ news, layout = "fullwidth", title = "Latest Football News" }: NewsSectionProps) {
   if (news.length === 0) return null;
 
@@ -84,10 +94,10 @@ export default function NewsSection({ news, layout = "fullwidth", title = "Lates
       {/* Featured article with hero image */}
       {featured && (
         <a href={featured.url} target="_blank" rel="noopener noreferrer" className="group block">
-          <div className="relative overflow-hidden bg-zinc-900">
+          <div className="relative overflow-hidden bg-zinc-900 h-64 sm:h-80">
             {featured.imageUrl ? (
               <NewsImage
-                src={featured.imageUrl}
+                src={boostImageUrl(featured.imageUrl, 1200)}
                 alt=""
                 fill
                 className="object-cover opacity-80 group-hover:opacity-100 transition-opacity"
@@ -95,7 +105,7 @@ export default function NewsSection({ news, layout = "fullwidth", title = "Lates
                 fallbackClassName="w-full h-64 sm:h-80 bg-linear-to-br from-[#002b5c] to-zinc-800"
               />
             ) : (
-              <div className="w-full h-64 sm:h-80 bg-linear-to-br from-[#002b5c] to-zinc-800 flex items-center justify-center">
+              <div className="w-full h-full bg-linear-to-br from-[#002b5c] to-zinc-800 flex items-center justify-center">
                 <Newspaper className="h-16 w-16 text-white/30" />
               </div>
             )}
@@ -113,31 +123,36 @@ export default function NewsSection({ news, layout = "fullwidth", title = "Lates
         </a>
       )}
 
-      {/* News list */}
-      <div className="border border-zinc-200 bg-white grid md:grid-cols-2">
+      {/* News card grid — magazine-style (featured story sits above) */}
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {displayItems.map((item, i) => {
           if (layout === "fullwidth" && i === 0) return null;
           return (
             <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer"
-              className="flex items-start gap-3 px-4 py-3 border-b even:border-l border-zinc-100 last:border-b-0 hover:bg-zinc-50 transition-colors group">
-              {item.imageUrl && (
-                <NewsImage
-                  src={item.imageUrl}
-                  alt=""
-                  width={56}
-                  height={56}
-                  className="h-14 w-14 sm:h-16 sm:w-16 object-cover rounded shrink-0"
-                  fallbackClassName="h-14 w-14 sm:h-16 sm:w-16 rounded shrink-0"
-                />
-              )}
-              <div className="min-w-0 flex-1">
+              className="group flex flex-col overflow-hidden rounded-sm border border-zinc-200 bg-white transition-shadow hover:shadow-md">
+              <div className="relative aspect-video w-full overflow-hidden bg-zinc-100">
+                {item.imageUrl ? (
+                  <NewsImage
+                    src={boostImageUrl(item.imageUrl, 640)}
+                    alt=""
+                    fill
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                    sizes="(max-width: 768px) 100vw, 40vw"
+                    fallbackClassName="w-full h-full bg-linear-to-br from-[#002b5c] to-zinc-800"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-linear-to-br from-[#002b5c] to-zinc-800 flex items-center justify-center">
+                    <Newspaper className="h-8 w-8 text-white/30" />
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col gap-1 p-3">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">{item.source}</span>
                 <p className="text-sm font-medium text-zinc-800 leading-snug group-hover:text-[#002b5c] transition-colors line-clamp-2">{item.title}</p>
-                {item.summary && <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1">{item.summary}</p>}
-                <div className="flex items-center gap-2 mt-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">{item.source}</span>
-                  <span className="text-[10px] text-zinc-300">•</span>
-                  <span className="text-[10px] text-zinc-400">{formatDate(item.date)}</span>
-                </div>
+                {item.summary && <p className="text-xs text-zinc-500 line-clamp-2">{item.summary}</p>}
+                <span className="mt-auto flex items-center gap-1 pt-1 text-[10px] text-zinc-400">
+                  <Clock className="h-3 w-3" /> {formatDate(item.date)}
+                </span>
               </div>
             </a>
           );

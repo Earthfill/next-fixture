@@ -93,6 +93,18 @@ async function fetchFeed(feedUrl: string): Promise<NewsItem[]> {
     }
 
     const xml = await res.text();
+
+    // rss.app "keyword" links (rss/app/rss-feed?keyword=...) redirect to an HTML
+    // explore page, and some feeds can serve an HTML error page. Detect that up
+    // front so a bad feed logs a clear warning instead of failing parseString
+    // silently (which looks like "no news from this feed" with no explanation).
+    if (!/^\s*(<\?xml|<\s*rss|<\s*feed)/i.test(xml)) {
+      console.warn(
+        `[news] feed did not return XML (HTML page, not an RSS feed) — skipping: ${feedUrl}`
+      );
+      return [];
+    }
+
     const feed = await parser.parseString(xml);
 
     let source = (feed.title || "").trim();
@@ -103,6 +115,9 @@ async function fetchFeed(feedUrl: string): Promise<NewsItem[]> {
         source = feedUrl;
       }
     }
+    // rss.app feed titles often embed the brand after " | " (e.g. "… | Sky Sports");
+    // keep just the brand so source badges stay short.
+    source = source.split(" | ").pop()?.trim() || source;
 
     return (feed.items || [])
       .slice(0, PER_SOURCE)
