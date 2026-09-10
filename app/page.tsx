@@ -13,6 +13,8 @@ import { AD_SLOTS } from "@/lib/ads";
 
 export const revalidate = 10800; // 3 hours
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL as string;
+
 export const metadata: Metadata = {
   title: "Football Predictions, Previews & Betting Tips Today",
   description:
@@ -57,23 +59,40 @@ export default async function HomePage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6">
-      {/* JSON-LD Structured Data */}
+      {/* JSON-LD Structured Data — an Organization block with a logo is what
+          Yandex (and Google's publisher logo) reads to show the brand in SERPs. */}
       <Script id="site-jsonld" type="application/ld+json" strategy="afterInteractive">
         {jsonLdScript({
           "@context": "https://schema.org",
-          "@type": "WebSite",
-          name: "Next Fixture",
-          url: process.env.NEXT_PUBLIC_SITE_URL as string,
-          description: "Football predictions, match previews and betting tips for Europe's top leagues.",
-          potentialAction: {
-            "@type": "SearchAction",
-            target: {
-              "@type": "EntryPoint",
-              urlTemplate: `${process.env.NEXT_PUBLIC_SITE_URL as string
-                }/search?q={search_term_string}`,
+          "@graph": [
+            {
+              "@type": "WebSite",
+              name: "Next Fixture",
+              url: SITE_URL,
+              description: "Football predictions, match previews and betting tips for Europe's top leagues.",
+              potentialAction: {
+                "@type": "SearchAction",
+                target: {
+                  "@type": "EntryPoint",
+                  urlTemplate: `${SITE_URL}/search?q={search_term_string}`,
+                },
+                "query-input": "required name=search_term_string",
+              },
+              publisher: {
+                "@type": "Organization",
+                name: "Next Fixture",
+                url: SITE_URL,
+                logo: `${SITE_URL}/logo.png`,
+              },
             },
-            "query-input": "required name=search_term_string",
-          },
+            {
+              "@type": "Organization",
+              name: "Next Fixture",
+              url: SITE_URL,
+              logo: `${SITE_URL}/logo.png`,
+              image: `${SITE_URL}/logo.png`,
+            },
+          ],
         })}
       </Script>
 
