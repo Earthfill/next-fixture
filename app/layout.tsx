@@ -44,8 +44,12 @@ export const metadata: Metadata = {
     images: [`${SITE_URL}/og-default.png`],
   },
   icons: {
-    icon: "/icon.png",
-    shortcut: "/favicon.ico",
+    // Declare a single crisp favicon (512x512 PNG) with an explicit type/sizes.
+    // Per Yandex favicon docs, when multiple <link rel="icon"> exist the robot
+    // may pick ANY one — declaring the tiny 16x16 favicon.ico too gives it the
+    // chance to select a blurry icon. /favicon.ico still exists at the root for
+    // legacy bots that probe it directly, we just don't advertise it.
+    icon: [{ url: "/icon.png", type: "image/png", sizes: "512x512" }],
     apple: "/apple-icon.png",
   },
   other: {
