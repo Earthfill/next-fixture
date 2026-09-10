@@ -1,21 +1,22 @@
 // ---------------------------------------------------------------------------
-// News Page — Football news from The Guardian
+// News Page — Football news from RSS feeds (Guardian-independent)
 // ---------------------------------------------------------------------------
 
 import React from "react";
 import type { Metadata } from "next";
 import { getFootballNews } from "@/lib/news";
 import NewsSection from "@/components/football/NewsSection";
-import AdSlot from "@/components/common/AdSlot";
-import { AD_SLOTS } from "@/lib/ads";
-import { Newspaper, ExternalLink } from "lucide-react";
+import { Newspaper } from "lucide-react";
 
-export const revalidate = 36000;
+// Render fresh on every request so the featured (large) first story is never a
+// stale prerender. News DATA itself is still cached ~3h via the "news" tag,
+// so this does not hammer the feeds.
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Football News — Latest Transfer News & Match Reports",
   description:
-    "Latest football news from The Guardian including transfer rumours, match reports, injury updates and analysis. Stay informed with daily football news across Premier League, La Liga, Serie A and Bundesliga.",
+    "Latest football news including transfer rumours, match reports, injury updates and analysis. Stay informed with daily football headlines across Premier League, La Liga, Serie A and Bundesliga.",
   openGraph: {
     title: "Football News — Latest Updates | Next Fixture",
     description:
@@ -40,24 +41,15 @@ export default async function NewsPage({
 }) {
   const { page: pageStr } = await searchParams;
   const currentPage = Math.max(1, parseInt(pageStr || "1"));
-  const { articles: news, totalPages } = await getFootballNews({ pageSize: 9, page: currentPage });
+  const { articles: news, totalPages } = await getFootballNews({ pageSize: 13, page: currentPage });
 
   return (
     <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="sm-heading-lg mb-1">Football News</h1>
-          <p className="text-sm text-zinc-500">Latest updates from The Guardian</p>
+          <p className="text-sm text-zinc-500">Latest football headlines from multiple sources</p>
         </div>
-        <a
-          href="https://www.theguardian.com/football"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm font-medium flex items-center gap-1"
-          style={{ color: '#002b5c' }}
-        >
-          The Guardian <ExternalLink className="h-3.5 w-3.5" />
-        </a>
       </div>
 
       {/* Ad slot — news leaderboard */}
@@ -66,7 +58,7 @@ export default async function NewsPage({
       {news.length === 0 ? (
         <div className="border border-zinc-200 p-8 text-center">
           <Newspaper className="h-8 w-8 text-zinc-300 mx-auto mb-2" />
-          <p className="text-sm text-zinc-500">No news available. Add your Guardian API key.</p>
+          <p className="text-sm text-zinc-500">No news available right now — check back soon.</p>
         </div>
       ) : (
         <>

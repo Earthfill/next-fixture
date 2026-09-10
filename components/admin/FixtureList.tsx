@@ -319,7 +319,7 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, to
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 flex items-end gap-2.5 text-right whitespace-nowrap">
+                    <td className="pl-4 pt-5 flex items-center gap-2.5 text-right whitespace-nowrap">
                       <Link
                         href={`/previews/${f.slug}`}
                         prefetch={false}

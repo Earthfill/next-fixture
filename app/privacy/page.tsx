@@ -229,10 +229,7 @@ export default function PrivacyPage() {
               </a>
             </li>
             <li className="text-sm text-zinc-600">
-              <strong className="text-zinc-700">The Guardian API</strong> — News content. 
-              <a href="https://www.theguardian.com/help/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-[#002b5c] hover:underline ml-1">
-                Privacy Policy <ExternalLink className="h-3 w-3 inline" />
-              </a>
+              <strong className="text-zinc-700">News sources (RSS)</strong> — Football headlines and outbound article links served from third-party publishers (e.g. BBC Sport, ESPN) via their public RSS feeds. Selecting a story sends you to that publisher&apos;s site.
             </li>
           </ul>
         </section>
