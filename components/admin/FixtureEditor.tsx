@@ -171,8 +171,8 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
           <div className="my-8 w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
             {/* Header */}
             <div className="flex items-start justify-between gap-4 border-b border-zinc-200 bg-zinc-50 px-5 py-4">
-              <div className="min-w-0">
-                <h3 className="text-base text-start font-bold leading-tight text-zinc-900">
+              <div className="text-start min-w-0">
+                <h3 className="text-base font-bold leading-tight text-zinc-900">
                   {homeTeam} <span className="font-normal text-zinc-400">vs</span> {awayTeam}
                 </h3>
                 <p className="mt-1 text-xs text-zinc-500">
@@ -238,7 +238,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
                         type="text"
                         value={tip}
                         onChange={(e) => setTip(e.target.value)}
-                        className="mt-1 w-full ml-4 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
+                        className="mt-1 w-auto ml-4 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
                         placeholder="Auto"
                       />
                     </label>
@@ -302,7 +302,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
                       rows={8}
                       value={previewText}
                       onChange={(e) => setPreviewText(e.target.value)}
-                      className="mt-2 w-full resize-y rounded-lg border border-zinc-200 px-3 py-2 text-sm leading-relaxed text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none"
+                      className="mt-2 w-full resize-y rounded-lg border border-zinc-200 px-3 py-2 text-sm leading-relaxed text-zinc-800 placeholder:text-zinc-400 focus:border-[#002b5c]/40 focus:outline-none scrollbar-none [&::-webkit-scrollbar]:hidden"
                       placeholder="Auto-generated preview (leave empty to use auto)"
                     />
                   </section>
