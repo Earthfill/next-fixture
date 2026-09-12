@@ -94,7 +94,7 @@ export async function getTeamInjuries(
   );
   if (!data?.response?.length) return [];
 
-  return data.response.map((i) => ({
+  const mapped = data.response.map((i) => ({
     playerId: i.player.id,
     playerName: i.player.name,
     status: mapInjuryStatus(i.player.type, i.player.reason),
@@ -102,6 +102,18 @@ export async function getTeamInjuries(
     reason: i.player.reason,
     fixtureDate: i.fixture.date,
   }));
+
+  // The injuries endpoint returns one record per player per fixture, so the same
+  // player can appear multiple times. Collapse to one entry per player, keeping
+  // the most recent record (latest fixture date).
+  const byPlayer = new Map<number, (typeof mapped)[number]>();
+  for (const rec of mapped) {
+    const existing = byPlayer.get(rec.playerId);
+    if (!existing || (rec.fixtureDate || "") >= (existing.fixtureDate || "")) {
+      byPlayer.set(rec.playerId, rec);
+    }
+  }
+  return [...byPlayer.values()];
 }
 
 /**

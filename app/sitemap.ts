@@ -7,6 +7,7 @@
 // ---------------------------------------------------------------------------
 import type { MetadataRoute } from "next";
 import { getAvailableMatchdays } from "@/lib/cache/pages";
+import { getAllTeams } from "@/lib/football/team-slugs";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL as string;
 
@@ -97,5 +98,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // As the sitemap regenerates hourly, preview pages will be indexed through
   // organic crawl of those links.
 
-  return [...staticPages, ...leaguePages, ...fixturePages];
+  // Team pages are cheap to include: the index is built purely from cached
+  // sources (upcoming fixtures + cached standings), so it never triggers an
+  // upstream API call.
+  const teams = await getAllTeams();
+  const teamPages: MetadataRoute.Sitemap = teams.map((t) => ({
+    url: `${SITE_URL}/teams/${t.slug}`,
+    lastModified: new Date(),
+    changeFrequency: "weekly" as const,
+    priority: 0.6,
+  }));
+
+  return [...staticPages, ...leaguePages, ...fixturePages, ...teamPages];
 }

@@ -13,20 +13,37 @@ import {
   deleteAdminOverride,
   type AdminOverridePatch,
 } from "@/lib/admin-overrides";
+import { getPredictionReview, invalidatePredictionReview, writePredictionReview, getFixtureEffectivePrediction } from "@/lib/cache/pages";
+import { normalizeSlug } from "@/lib/football/config";
+
+/** Canonical (ASCII-safe) fixture slug — matches generateSlug & cache keys. */
+function canonicalSlug(slug: string): string {
+  return normalizeSlug(slug);
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const slug = request.nextUrl.searchParams.get("slug");
-  if (!slug) {
+  const rawSlug = request.nextUrl.searchParams.get("slug");
+  if (!rawSlug) {
     return NextResponse.json({ success: false, error: "Missing slug." }, { status: 400 });
   }
+  const slug = canonicalSlug(rawSlug);
   if (!isAdminAuthorized(request)) {
     return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
   }
   const override = await getAdminOverride(slug);
-  return NextResponse.json({ success: true, override });
+  // Prefill data for the FixtureEditor — the auto (pre-override) values and the
+  // effective values actually displayed (override wins over auto).
+  const pred = await getFixtureEffectivePrediction(slug).catch(() => null);
+  return NextResponse.json({
+    success: true,
+    override,
+    auto: pred?.auto ?? null,
+    effective: pred?.effective ?? null,
+    hasOverride: pred?.hasOverride ?? false,
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -41,7 +58,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
   }
 
-  const slug = typeof body.slug === "string" ? body.slug.trim() : "";
+  const rawSlug = typeof body.slug === "string" ? body.slug.trim() : "";
+  const slug = canonicalSlug(rawSlug);
   if (!slug) {
     return NextResponse.json({ success: false, error: "Missing slug." }, { status: 400 });
   }
@@ -115,9 +133,28 @@ export async function POST(request: NextRequest) {
 
   if (persisted) {
     let verified = false;
+    // Compare every prediction field against the read-back so a changed score,
+    // tip, win-probability or preview text is confirmed durable before the
+    // admin is told "Saved".
+    const expected =
+      JSON.stringify([
+        override.predictedScore ?? null,
+        override.tip ?? null,
+        override.winProbability ?? null,
+        override.previewText ?? null,
+      ]);
     for (let attempt = 0; attempt < 5 && !verified; attempt++) {
       const check = await getAdminOverride(slug).catch(() => null);
-      if (check?.tip === override.tip) verified = true;
+      const actual =
+        check == null
+          ? null
+          : JSON.stringify([
+              check.predictedScore ?? null,
+              check.tip ?? null,
+              check.winProbability ?? null,
+              check.previewText ?? null,
+            ]);
+      verified = actual === expected;
       if (!verified && attempt < 4) {
         await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
       }
@@ -141,14 +178,23 @@ export async function POST(request: NextRequest) {
     // non-fatal
   }
 
-  return NextResponse.json({ success: true, override, persisted });
+  // Recompute the prediction-quality review (tip ↔ scoreline ↔ win probability)
+  // so the admin table's warning icon can update immediately after the edit.
+  await invalidatePredictionReview(slug).catch(() => undefined);
+  const review = await getPredictionReview(slug).catch(() => null);
+  if (review) {
+    await writePredictionReview(slug, review).catch(() => undefined);
+  }
+
+  return NextResponse.json({ success: true, override, persisted, review });
 }
 
 export async function DELETE(request: NextRequest) {
-  const slug = request.nextUrl.searchParams.get("slug");
-  if (!slug) {
+  const rawSlug = request.nextUrl.searchParams.get("slug");
+  if (!rawSlug) {
     return NextResponse.json({ success: false, error: "Missing slug." }, { status: 400 });
   }
+  const slug = canonicalSlug(rawSlug);
   if (!isAdminAuthorized(request)) {
     return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
   }
@@ -161,5 +207,12 @@ export async function DELETE(request: NextRequest) {
     // non-fatal
   }
 
-  return NextResponse.json({ success: true });
+  // Recompute review after removing the override (auto values are back).
+  await invalidatePredictionReview(slug).catch(() => undefined);
+  const review = await getPredictionReview(slug).catch(() => null);
+  if (review) {
+    await writePredictionReview(slug, review).catch(() => undefined);
+  }
+
+  return NextResponse.json({ success: true, review });
 }

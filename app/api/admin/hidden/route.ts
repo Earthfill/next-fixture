@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { hideFixture, unhideFixture } from "@/lib/hidden-fixtures";
+import { normalizeSlug } from "@/lib/football/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,7 +25,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
   }
 
-  const slug = typeof body.slug === "string" ? body.slug.trim() : "";
+  const rawSlug = typeof body.slug === "string" ? body.slug.trim() : "";
+  const slug = normalizeSlug(rawSlug);
   if (!slug) {
     return NextResponse.json({ success: false, error: "Missing slug." }, { status: 400 });
   }

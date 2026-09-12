@@ -74,14 +74,6 @@ export default async function HomePage() {
                 name: "Next Fixture",
                 url: SITE_URL,
                 description: "Football predictions, match previews and betting tips for Europe's top leagues.",
-                potentialAction: {
-                  "@type": "SearchAction",
-                  target: {
-                    "@type": "EntryPoint",
-                    urlTemplate: `${SITE_URL}/search?q={search_term_string}`,
-                  },
-                  "query-input": "required name=search_term_string",
-                },
                 publisher: {
                   "@type": "Organization",
                   name: "Next Fixture",

@@ -25,6 +25,7 @@ import {
   Pencil,
   Search,
   SlidersHorizontal,
+  TriangleAlert,
 } from "lucide-react";
 import FixtureEditor from "@/components/admin/FixtureEditor";
 import type { Fixture } from "@/lib/types";
@@ -33,12 +34,13 @@ interface FixtureListProps {
   fixtures: Fixture[];
   overriddenSlugs: string[];
   hiddenSlugs: string[];
+  flaggedReasons?: Record<string, string[]>;
   token: string;
 }
 
 type SortKey = "date" | "competition" | "home" | "away" | "state";
 type SortDir = "asc" | "desc";
-type StateFilter = "all" | "edited" | "auto" | "hidden";
+type StateFilter = "all" | "edited" | "auto" | "hidden" | "review";
 
 const SORTABLE: { key: SortKey; label: string; align?: "center" | "right" }[] = [
   { key: "date", label: "Kick-off" },
@@ -63,11 +65,14 @@ function formatTime(iso: string): string {
   });
 }
 
-export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, token }: FixtureListProps) {
+export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, flaggedReasons = {}, token }: FixtureListProps) {
   const editedSet = useMemo(() => new Set(overriddenSlugs), [overriddenSlugs]);
   // Local, mutable copy of the hidden set so a Hide/Show toggle updates the
   // table immediately without a server round-trip for the whole list.
   const [hiddenSet, setHiddenSet] = useState<Set<string>>(() => new Set(hiddenSlugs));
+  // Local copy of the prediction-review flags so a FixtureEditor save can
+  // clear/update a warning icon without a full server re-render.
+  const [flaggedMap, setFlaggedMap] = useState<Record<string, string[]>>(flaggedReasons);
   const [busySlug, setBusySlug] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -90,6 +95,7 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, to
       if (stateFilter === "edited" && !editedSet.has(f.slug)) return false;
       if (stateFilter === "auto" && editedSet.has(f.slug)) return false;
       if (stateFilter === "hidden" && !hiddenSet.has(f.slug)) return false;
+      if (stateFilter === "review" && !(flaggedMap[f.slug]?.length)) return false;
       if (q) {
         const haystack =
           `${f.homeTeam.name} ${f.awayTeam.name} ${f.competition}`.toLowerCase();
@@ -116,7 +122,7 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, to
           return sign * (stateVal(a) - stateVal(b));
       }
     });
-  }, [fixtures, editedSet, hiddenSet, query, competition, stateFilter, sortKey, sortDir]);
+  }, [fixtures, editedSet, hiddenSet, flaggedMap, query, competition, stateFilter, sortKey, sortDir]);
 
   async function toggleHidden(f: Fixture): Promise<void> {
     if (busySlug) return;
@@ -219,12 +225,14 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, to
           <option value="edited">Edited</option>
           <option value="auto">Auto</option>
           <option value="hidden">Hidden</option>
+          <option value="review">⚠ Review</option>
         </select>
 
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-zinc-500">
             {rows.length} of {fixtures.length} matches
             {hiddenSet.size > 0 ? ` · ${hiddenSet.size} hidden` : ""}
+            {Object.keys(flaggedMap).length > 0 ? ` · ${Object.keys(flaggedMap).length} flagged` : ""}
           </span>
           {hasFilters && (
             <button
@@ -292,9 +300,18 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, to
                 return (
                   <tr key={f.id} className={`hover:bg-zinc-50/70 ${hidden ? "bg-red-50/40" : ""}`}>
                     <td className="px-5 py-3 whitespace-nowrap">
-                      <div className="text-sm font-medium text-zinc-800">{formatDate(f.date)}</div>
-                      <div className="mt-0.5 flex items-center gap-1 text-xs text-zinc-400">
-                        <Clock className="h-3 w-3" /> {formatTime(f.date)}
+                      <div className="flex items-start gap-1.5">
+                        {flaggedMap[f.slug]?.length ? (
+                          <span className="mt-0.5 shrink-0" title={flaggedMap[f.slug].join(" ")}>
+                            <TriangleAlert className="h-4 w-4 text-amber-500" aria-label="Prediction needs review" />
+                          </span>
+                        ) : null}
+                        <div>
+                          <div className="text-sm font-medium text-zinc-800">{formatDate(f.date)}</div>
+                          <div className="mt-0.5 flex items-center gap-1 text-xs text-zinc-400">
+                            <Clock className="h-3 w-3" /> {formatTime(f.date)}
+                          </div>
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -349,12 +366,23 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, to
                         {hidden ? "Show" : "Hide"}
                       </button>
                       <FixtureEditor
-                        slug={f.slug}
-                        date={f.date}
-                        homeTeam={f.homeTeam.name}
-                        awayTeam={f.awayTeam.name}
-                        token={token}
-                      />
+                          slug={f.slug}
+                          date={f.date}
+                          homeTeam={f.homeTeam.name}
+                          awayTeam={f.awayTeam.name}
+                          token={token}
+                          needsReview={!!flaggedMap[f.slug]?.length}
+                          onEdited={() => {
+                            // Once the admin has edited this match it is treated
+                            // as "reviewed" — clear the warning icon immediately.
+                            setFlaggedMap((prev) => {
+                              if (!(f.slug in prev)) return prev;
+                              const next = { ...prev };
+                              delete next[f.slug];
+                              return next;
+                            });
+                          }}
+                        />
                     </td>
                   </tr>
                 );

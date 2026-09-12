@@ -14,9 +14,17 @@
 // NOTE: server-only module. Client components keep using @/lib/sports-api
 // (this module pulls in ioredis/pg, which must never enter the client bundle).
 
-import { cacheAside, writeCache } from "@/lib/cache";
-import { standingsKey, upcomingFixturesKey, UPCOMING_DAYS, TTL } from "@/lib/cache/keys";
+import { cacheAside, writeCache, peekCache, invalidateCache } from "@/lib/cache";
+import { predictionReviewKey, standingsKey, upcomingFixturesKey, UPCOMING_DAYS, TTL } from "@/lib/cache/keys";
 import { filterHidden, isSlugHidden } from "@/lib/hidden-fixtures";
+import { getAdminOverride } from "@/lib/admin-overrides";
+import { evaluatePrediction } from "@/lib/prediction-review";
+import { normalizeSlug } from "@/lib/football/config";
+
+/** Canonical fixture slug used for cache keys (ASCII-safe, matches generateSlug). */
+function canonicalSlug(slug: string): string {
+  return normalizeSlug(slug);
+}
 import type {
   Fixture, LeagueData, MatchdayGroup, MatchPreview, TopScorer, LineupEntry, Team, HighlightVideo,
 } from "@/lib/types";
@@ -34,6 +42,12 @@ import {
 import { getFixtureLineups as getFixtureLineupsRaw } from "@/lib/football/lineups";
 import { getFixtureOdds as getFixtureOddsRaw } from "@/lib/football/odds";
 import { getYouTubeHighlights as getYouTubeHighlightsRaw } from "@/lib/football/highlights";
+import { getTeamRecentResults as getTeamRecentResultsRaw, getTeamHeadToHeadByIds as getTeamHeadToHeadByIdsRaw } from "@/lib/football/service";
+import { getTeamSquad as getTeamSquadRaw, getTeamInjuries as getTeamInjuriesRaw } from "@/lib/football-api";
+import { computePrediction } from "@/lib/football/win-probability";
+import { generateNlgAnalysis } from "@/lib/football/nlg-analysis";
+import { computeRoundGoalStats } from "@/lib/football/round-stats";
+import type { SquadPlayerWithRating } from "@/lib/types";
 
 /** Upcoming fixtures across all covered leagues (24h). Hidden matches excluded. */
 export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
@@ -102,7 +116,7 @@ export async function getTopScorers(leagueSlug: string, limit?: number): Promise
   const lim = limit ?? 10;
 	
   const { data } = await cacheAside<TopScorer[]>(
-    `topscorers:${leagueSlug}:${lim}`,
+    `topscorers:v2:${leagueSlug}:${lim}`,
     TTL.fixtures,
     () => getTopScorersRaw(leagueSlug, lim).then((r) => r ?? [])
   );
@@ -114,7 +128,7 @@ export async function getTopScorers(leagueSlug: string, limit?: number): Promise
 export async function getTopAssists(leagueSlug: string, limit?: number): Promise<TopScorer[]> {
   const lim = limit ??  ​10;
   const { data } = await cacheAside<TopScorer[]>(
-    `topassists:${leagueSlug}:${lim}`,
+    `topassists:v2:${leagueSlug}:${lim}`,
     TTL.fixtures,
     () => getTopAssistsRaw(leagueSlug, lim).then((r) => r ?? [])
   );
@@ -138,11 +152,12 @@ export async function getPastResults(leagueSlug: string, limit?: number): Promis
  * resolve to null so their preview page 404s on the public site.
  */
 export async function getMatchPreviewBySlug(slug: string): Promise<MatchPreview | null> {
-  if (await isSlugHidden(slug)) return null;
+  const key = canonicalSlug(slug);
+  if (await isSlugHidden(key)) return null;
   const { data } = await cacheAside<MatchPreview | null>(
-    `preview:${slug}`,
+    `preview:${key}`,
     TTL.preview,
-    () => getMatchPreviewBySlugRaw(slug)
+    () => getMatchPreviewBySlugRaw(key)
   );
 	return data ?? null;
 }
@@ -219,4 +234,267 @@ function cacheKeyPart(value: string): string {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+// ─── Prediction-consistency review (tip ↔ scoreline ↔ win probability) ──
+
+export interface PredictionReviewResult {
+  flagged: boolean;
+  reasons: string[];
+  /** false = no cached prediction data to evaluate against. */
+  available: boolean;
+}
+
+/**
+ * Evaluate a fixture's prediction for tip↔scoreline↔win-probability conflicts.
+ * Cheap for the admin table: reads ONLY cached data (cached preview + admin
+ * override) — never triggers an upstream API call.
+ */
+export async function getPredictionReview(slug: string): Promise<PredictionReviewResult> {
+  // 1. Authoritative cached result (written by preview page render or override save).
+  const key = canonicalSlug(slug);
+  const cached = await peekCache<PredictionReviewResult>(predictionReviewKey(key));
+  if (cached) return cached;
+
+  // 2. Best-effort from the cached preview payload + admin override.
+  const [override, preview] = await Promise.all([
+    getAdminOverride(key),
+    peekCache<MatchPreview>(`preview:${key}`),
+  ]);
+  const prediction = preview?.prediction;
+  if (!preview?.fixture || !prediction?.predictedScore || !prediction?.tip) {
+    return { flagged: false, reasons: [], available: false };
+  }
+
+  const effective = {
+    predictedScore: override?.predictedScore ?? prediction.predictedScore,
+    tip: override?.tip ?? prediction.tip,
+    winProbability: override?.winProbability ?? prediction.winProbability,
+    btts: prediction.btts ?? null,
+    overUnder: prediction.overUnder ?? null,
+  };
+  if (!effective.predictedScore || !effective.tip) {
+    return { flagged: false, reasons: [], available: false };
+  }
+
+  const review = evaluatePrediction(
+    effective.tip,
+    {
+      predictedScore: effective.predictedScore,
+      winProbability: effective.winProbability,
+      btts: effective.btts,
+      overUnder: effective.overUnder,
+    },
+    preview.fixture.homeTeam.name,
+    preview.fixture.awayTeam.name,
+    preview.fixture.homeTeam.shortName,
+    preview.fixture.awayTeam.shortName
+  );
+
+  return { flagged: review.flagged, reasons: review.reasons, available: true };
+}
+
+/** Persist an authoritative review result (preview page render, override save). */
+export async function writePredictionReview(slug: string, result: PredictionReviewResult): Promise<void> {
+  await writeCache(predictionReviewKey(canonicalSlug(slug)), result, TTL.preview).catch(() => undefined);
+}
+
+/** Drop the cached review so the next read recomputes (after an admin edit). */
+export async function invalidatePredictionReview(slug: string): Promise<void> {
+  await invalidateCache(predictionReviewKey(canonicalSlug(slug))).catch(() => undefined);
+}
+
+// ─── Team-page data adapters (cached) ─────────────────────────────────
+
+/** Recent finished results for a team (12h). */
+export async function getTeamRecentResults(
+  teamId: number | string,
+  count: number = 8
+): Promise<Fixture[]> {
+  const id = Number(teamId);
+  const { data } = await cacheAside<Fixture[]>(
+    `teamresults:${id}:${count}`,
+    TTL.standings,
+    () => getTeamRecentResultsRaw(id, count).then((r) => r ?? [])
+  );
+  return data ?? [];
+}
+
+/** Head-to-head between two teams by id (24h). */
+export async function getTeamHeadToHead(
+  teamAId: number | string,
+  teamBId: number | string,
+  count: number = 6
+): Promise<ReturnType<typeof getTeamHeadToHeadByIdsRaw>> {
+  const a = Number(teamAId);
+  const b = Number(teamBId);
+  const { data } = await cacheAside(
+    `teamh2h:${a}:${b}:${count}`,
+    TTL.standings,
+    () => getTeamHeadToHeadByIdsRaw(a, b, count).then((r) => r ?? [])
+  );
+  return data ?? [];
+}
+
+/** Team squad / players list (24h). */
+export async function getTeamSquadData(teamId: number | string): Promise<SquadPlayerWithRating[]> {
+  const id = Number(teamId);
+  const { data } = await cacheAside<SquadPlayerWithRating[]>(
+    `teamsquad:${id}`,
+    TTL.standings,
+    () => getTeamSquadRaw(id)
+  );
+  return data ?? [];
+}
+
+/** Current injury/suspension list for a team (12h). */
+export async function getTeamInjuriesData(teamId: number | string): Promise<Awaited<ReturnType<typeof getTeamInjuriesRaw>>> {
+  const id = Number(teamId);
+  const { data } = await cacheAside(
+    `teaminjuries:${id}`,
+    TTL.standings,
+    () => getTeamInjuriesRaw(id).then((r) => r ?? [])
+  );
+  return data ?? [];
+}
+
+/** Top scorers restricted to one team (reads the per-league topscorers cache). */
+export async function getTeamTopScorersData(
+  teamId: number | string,
+  leagueSlug: string
+): Promise<TopScorer[]> {
+  const id = String(teamId);
+  const scorers = await getTopScorers(leagueSlug, 50);
+  return (scorers ?? []).filter((s) => String(s.team.id) === id || s.team.id === id);
+}
+
+/** Top assists restricted to one team (reads the per-league topassists cache). */
+export async function getTeamTopAssistsData(
+  teamId: number | string,
+  leagueSlug: string
+): Promise<TopScorer[]> {
+  const id = String(teamId);
+  const assists = await getTopAssists(leagueSlug, 50);
+  return (assists ?? []).filter((s) => String(s.team.id) === id || s.team.id === id);
+}
+
+// ─── Per-matchday top scorers/assists for UEFA league-phase (round-scoped) ──
+
+const UEFA_LEAGUE_SLUG_TO_ID: Record<string, number> = {
+  "champions-league": 2,
+  "europa-league": 3,
+  "conference-league": 848,
+};
+
+export interface LeagueRoundStats {
+  round: number;
+  scorers: TopScorer[];
+  assisters: TopScorer[];
+  /** True once at least one knockout-phase match has finished (goals included). */
+  hasKnockouts: boolean;
+}
+
+/**
+ * Cumulative top scorers & assist providers for a UEFA competition, computed
+ * from its finished fixtures' goal events (NOT the season-cumulative /players
+ * endpoints). Numbers accumulate across every finished league-phase matchday
+ * (up to 8 for UCL/UEL, 6 for UECL) plus every finished knockout-phase tie, so
+ * the leaderboard is a full-season running total rather than a single matchday.
+ * Returns null for non-UEFA slugs or before any league-phase match has finished.
+ */
+export async function getLeagueRoundStats(leagueSlug: string): Promise<LeagueRoundStats | null> {
+  const id = UEFA_LEAGUE_SLUG_TO_ID[leagueSlug];
+  if (id == null) return null;
+
+  const { data } = await cacheAside<LeagueRoundStats | null>(
+    `roundstats:v3:${leagueSlug}`,
+    TTL.fixtures,
+    () =>
+      computeRoundGoalStats(id, undefined, { cumulative: true }).then((s) =>
+        s.fixturesCounted > 0 && s.scorers.length
+          ? { round: s.round, scorers: s.scorers, assisters: s.assisters, hasKnockouts: s.hasKnockouts }
+          : null
+      )
+  );
+  return data ?? null;
+}
+// ─── Effective prediction for the admin FixtureEditor ──────────────────
+// Mirrors the preview page's effective-value computation exactly, so the
+// editor prefills with the SAME numbers/text the public page displays
+// (override wins → API prediction → Poisson model). `auto` holds the pure
+// pre-override values so the editor can detect which fields the admin changed.
+
+export interface FixturePredictionValues {
+  predictedScore: { home: number; away: number } | null;
+  tip: string | null;
+  winProbability: { home: number; draw: number; away: number } | null;
+  previewText: string | null;
+}
+
+export interface EffectivePredictionResult {
+  auto: FixturePredictionValues;
+  effective: FixturePredictionValues;
+  /** true when any part of this prediction actually came from an admin override. */
+  hasOverride: boolean;
+}
+
+export async function getFixtureEffectivePrediction(slug: string): Promise<EffectivePredictionResult | null> {
+  const key = canonicalSlug(slug);
+  const [preview, override] = await Promise.all([
+    getMatchPreviewBySlug(key),
+    getAdminOverride(key),
+  ]);
+  if (!preview?.fixture) return null;
+
+  const { fixture, homeForm, awayForm, headToHead, prediction } = preview;
+
+  const compSlug = fixture.competition.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+  const [leagueData, oddsRows] = await Promise.all([
+    getLeagueStandings(compSlug).catch(() => null),
+    getFixtureOdds(fixture.id, fixture.homeTeam.shortName, fixture.awayTeam.shortName).catch(() => null),
+  ]);
+
+  const homeStanding = leagueData?.standings?.find((s) => s.team.name === fixture.homeTeam.name) ?? null;
+  const awayStanding = leagueData?.standings?.find((s) => s.team.name === fixture.awayTeam.name) ?? null;
+  const odds = oddsRows?.[0]
+    ? { homeOdds: oddsRows[0].home, drawOdds: oddsRows[0].draw, awayOdds: oddsRows[0].away }
+    : null;
+
+  const predictionResult = computePrediction({
+    headToHead,
+    homeForm,
+    awayForm,
+    homeStanding,
+    awayStanding,
+    odds,
+  });
+
+  // Pure auto values — exactly what the preview page renders with no override.
+  const auto: FixturePredictionValues = {
+    predictedScore: prediction?.predictedScore
+      ?? { home: predictionResult.homeScore, away: predictionResult.awayScore },
+    tip: prediction?.tip ?? predictionResult.tip,
+    winProbability: {
+      home: predictionResult.homeWin,
+      draw: predictionResult.draw,
+      away: predictionResult.awayWin,
+    },
+    previewText: generateNlgAnalysis(
+      fixture.homeTeam.name, fixture.awayTeam.name, fixture.competition,
+      homeForm, awayForm, headToHead,
+    ),
+  };
+
+  // Effective = override wins over auto (what the public page actually shows).
+  const effective: FixturePredictionValues = {
+    predictedScore: override?.predictedScore ?? auto.predictedScore,
+    tip: override?.tip ?? auto.tip,
+    winProbability: override?.winProbability ?? auto.winProbability,
+    previewText: override?.previewText?.trim() || auto.previewText,
+  };
+
+  return {
+    auto,
+    effective,
+    hasOverride: Boolean(override && (override.predictedScore || override.tip || override.winProbability || override.previewText)),
+  };
 }

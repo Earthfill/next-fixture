@@ -19,6 +19,12 @@ import {
   pgHiddenAdd,
   pgHiddenRemove,
 } from "@/lib/cache/postgres";
+import { normalizeSlug } from "@/lib/football/config";
+
+/** Canonical fixture slug used as the hidden-store key (ASCII-safe). */
+function canonicalSlug(slug: string): string {
+  return normalizeSlug(slug);
+}
 
 // How long a process-local copy of the hidden set is trusted before it is
 // re-read from Postgres. Short enough that a hide/unhide on another serverless
@@ -69,13 +75,13 @@ export async function filterHidden<T extends { slug?: string }>(items: T[]): Pro
   if (!items || items.length === 0) return items;
   const hidden = await getHiddenSlugs();
   if (hidden.size === 0) return items;
-  return items.filter((item) => item.slug === undefined || !hidden.has(item.slug));
+  return items.filter((item) => item.slug === undefined || !hidden.has(canonicalSlug(item.slug)));
 }
 
 /** Is this specific slug hidden? */
 export async function isSlugHidden(slug: string): Promise<boolean> {
   const hidden = await getHiddenSlugs();
-  return hidden.has(slug);
+  return hidden.has(canonicalSlug(slug));
 }
 
 export interface SetHiddenResult {
@@ -90,12 +96,13 @@ export interface SetHiddenResult {
  */
 async function setHidden(slug: string, shouldHide: boolean): Promise<SetHiddenResult> {
   await initPostgres();
+  const key = canonicalSlug(slug);
 
   let persisted = false;
   if (pgAvailable()) {
     persisted = shouldHide
-      ? await pgHiddenAdd(slug).catch(() => false)
-      : await pgHiddenRemove(slug).catch(() => false);
+      ? await pgHiddenAdd(key).catch(() => false)
+      : await pgHiddenRemove(key).catch(() => false);
     if (persisted) {
       await pgDrainPool();
     }
@@ -111,7 +118,7 @@ async function setHidden(slug: string, shouldHide: boolean): Promise<SetHiddenRe
     let hidden: Set<string> = new Set();
     for (let attempt = 0; attempt < 5; attempt++) {
       hidden = await readFromPg();
-      const matches = hidden.has(slug) === shouldHide;
+      const matches = hidden.has(key) === shouldHide;
       if (matches) return { hidden, persisted };
       if (attempt < 4) {
         await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
@@ -122,8 +129,8 @@ async function setHidden(slug: string, shouldHide: boolean): Promise<SetHiddenRe
 
   // No-PG fallback: update the process-local copy directly.
   const next = new Set<string>(memorySet ?? []);
-  if (shouldHide) next.add(slug);
-  else next.delete(slug);
+  if (shouldHide) next.add(key);
+  else next.delete(key);
   refreshMemory([...next]);
   return { hidden: next, persisted };
 }

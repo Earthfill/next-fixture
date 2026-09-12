@@ -31,3 +31,12 @@ export function upcomingFixturesKey(days: number = UPCOMING_DAYS): string {
 export function standingsKey(leagueSlug: string): string {
   return `standings:${leagueSlug}`;
 }
+
+/** Per-fixture prediction-consistency review (tip vs scoreline vs win probability). */
+export function predictionReviewKey(slug: string): string {
+  return `predreview:${slug}`;
+}
+
+/** Cached team index (slug → team + competitions) used by /teams/[slug]. */
+export const TEAMS_INDEX_KEY = "teams:index";
+export const TEAMS_INDEX_TTL = 24 * 60 * 60;

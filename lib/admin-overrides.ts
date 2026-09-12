@@ -20,6 +20,12 @@ import {
   pgOverrideDelete,
   pgOverrideList,
 } from "@/lib/cache/postgres";
+import { normalizeSlug } from "@/lib/football/config";
+
+/** Canonical fixture slug used as the override store key (ASCII-safe). */
+function canonicalSlug(slug: string): string {
+  return normalizeSlug(slug);
+}
 
 export interface AdminOverride {
   predictedScore: { home: number; away: number } | null;
@@ -44,9 +50,13 @@ function isExpired(override: AdminOverride): boolean {
 
 export async function getAdminOverride(slug: string): Promise<AdminOverride | null> {
   await initPostgres();
+  const key = canonicalSlug(slug);
 
   if (pgAvailable()) {
-    const row = await pgOverrideGet(slug).catch(() => null);
+    // Try the canonical (ASCII) form first, then the raw form — earlier slugs
+    // (and older DB rows) can carry non-ASCII characters like "ü"/"%C3%BC",
+    // while new ones are URL-safe. Either should resolve to the same override.
+    const row = (await pgOverrideGet(key).catch(() => null)) ?? (await pgOverrideGet(slug).catch(() => null));
     if (row) {
       const override: AdminOverride = {
         predictedScore: row.predictedScore,
@@ -55,18 +65,19 @@ export async function getAdminOverride(slug: string): Promise<AdminOverride | nu
         previewText: row.previewText,
         expiresAt: row.expiresAt,
       };
-      memoryStore.set(slug, override);
+      memoryStore.set(key, override);
       return override;
     }
     // PG is authoritative — an absent (or expired) row means no override.
-    memoryStore.delete(slug);
+    memoryStore.delete(key);
     return null;
   }
 
   // No-PG fallback (dev/standalone): process-local memory only.
-  const mem = memoryStore.get(slug);
+  const mem = memoryStore.get(key) ?? memoryStore.get(slug);
   if (mem) {
     if (isExpired(mem)) {
+      memoryStore.delete(key);
       memoryStore.delete(slug);
       return null;
     }
@@ -87,8 +98,9 @@ export async function setAdminOverride(
   opts?: { sync?: boolean }
 ): Promise<SetAdminOverrideResult> {
   await initPostgres();
+  const key = canonicalSlug(slug);
 
-  const existing = await getAdminOverride(slug);
+  const existing = await getAdminOverride(key);
 
   const override: AdminOverride = {
     predictedScore:
@@ -109,7 +121,7 @@ export async function setAdminOverride(
 
   let persisted = false;
   if (pgAvailable()) {
-    persisted = await pgOverrideSet(slug, override, expiresAt).catch(() => false);
+    persisted = await pgOverrideSet(key, override, expiresAt).catch(() => false);
     // In sync mode we must not return until the write can be read back — the
     // caller re-renders/revalidates the preview immediately, and a write that
     // is still buffered would make the next render miss the override. pg's `idle`
@@ -120,27 +132,36 @@ export async function setAdminOverride(
     }
   }
   // Keep the memory map warm for the no-PG fallback path.
-  memoryStore.set(slug, override);
+  memoryStore.set(key, override);
 
   return { override, persisted };
 }
 
 export async function deleteAdminOverride(slug: string): Promise<void> {
   await initPostgres();
+  const key = canonicalSlug(slug);
   if (pgAvailable()) {
-    await pgOverrideDelete(slug).catch(() => undefined);
+    await pgOverrideDelete(key).catch(() => undefined);
   }
-  memoryStore.delete(slug);
+  memoryStore.delete(key);
 }
 
 /** Which of the given fixture slugs have a valid override right now? */
 export async function getOverriddenSlugs(slugs: string[]): Promise<string[]> {
   await initPostgres();
+  // Check both the canonical (ASCII) form and the raw form — older fixtures /
+  // DB rows may carry non-ASCII characters while new ones are URL-safe.
+  const keys = slugs.flatMap((s) => {
+    const k = canonicalSlug(s);
+    return k === s ? [k] : [k, s];
+  });
   if (pgAvailable()) {
-    return pgOverrideList(slugs).catch(() => []);
+    const found = await pgOverrideList(keys).catch(() => []);
+    const foundSet = new Set(found.map((f) => canonicalSlug(f)));
+    return slugs.filter((s) => foundSet.has(canonicalSlug(s)) || foundSet.has(s));
   }
   return slugs.filter((slug) => {
-    const mem = memoryStore.get(slug);
+    const mem = memoryStore.get(canonicalSlug(slug)) ?? memoryStore.get(slug);
     return mem !== undefined && !isExpired(mem);
   });
 }

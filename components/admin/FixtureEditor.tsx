@@ -5,8 +5,8 @@
 // win probability, match preview text). Saves to /api/admin/override.
 // ---------------------------------------------------------------------------
 
-import { useState } from "react";
-import { Pencil, X, Loader2, CheckCircle2, Trash2 } from "lucide-react";
+import { useState, useRef } from "react";
+import { Pencil, X, Loader2, CheckCircle2, Trash2, Sparkles } from "lucide-react";
 
 interface FixtureEditorProps {
   slug: string;
@@ -14,6 +14,10 @@ interface FixtureEditorProps {
   homeTeam: string;
   awayTeam: string;
   token: string;
+  /** Whether this match is currently flagged as needing prediction review. */
+  needsReview?: boolean;
+  /** Called after a successful save — passes the recomputed prediction review. */
+  onEdited?: (review: { flagged: boolean; reasons: string[] } | null) => void;
 }
 
 interface OverridePayload {
@@ -23,7 +27,32 @@ interface OverridePayload {
   previewText: string | null;
 }
 
-export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }: FixtureEditorProps) {
+interface AutoValues {
+  predictedScore: { home: number; away: number } | null;
+  tip: string | null;
+  winProbability: { home: number; draw: number; away: number } | null;
+  previewText: string | null;
+}
+
+/** Recognised tip-format templates (match the prediction-review classifier). */
+function tipTemplates(home: string, away: string): { label: string; value: string }[] {
+  const H = home;
+  const A = away;
+  return [
+    { label: "Winner: Home", value: `Winner : ${H}` },
+    { label: "Winner: Away", value: `Winner : ${A}` },
+    { label: "DC 1X", value: `Double chance : ${H} or draw` },
+    { label: "DC X2", value: `Double chance : draw or ${A}` },
+    { label: "Combo +2.5", value: `Combo Winner : ${H} and +2.5 goals` },
+    { label: "Combo +1.5", value: `Combo Winner : ${H} and +1.5 goals` },
+    { label: "Over 2.5", value: "Over 2.5 goals" },
+    { label: "Under 2.5", value: "Under 2.5 goals" },
+    { label: "BTTS Yes", value: "Both teams to score" },
+    { label: "CS 2-1", value: "Correct Score: 2-1" },
+  ];
+}
+
+export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token, needsReview, onEdited }: FixtureEditorProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -38,25 +67,69 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
   const [awayWin, setAwayWin] = useState("");
   const [previewText, setPreviewText] = useState("");
 
-  async function openEditor(): Promise<void> {
-    setOpen(true);
-    setMessage(null);
-    setLoading(true);
+  // The pre-override ("auto") prediction values loaded when the editor opens —
+  // used to decide which fields the admin actually changed before saving.
+  const autoRef = useRef<AutoValues | null>(null);
+  // The values the fields were prefilled with when the editor opened
+  // (override ?? auto). Used to detect which fields the admin edited.
+  const baselineRef = useRef<AutoValues | null>(null);
+
+  async function fetchPrefill(): Promise<boolean> {
     try {
       const res = await fetch(
         `/api/admin/override?slug=${encodeURIComponent(slug)}&token=${encodeURIComponent(token)}`
       );
       const data = await res.json();
       const o: OverridePayload | null = data.override ?? null;
-      setHome(o?.predictedScore ? String(o.predictedScore.home) : "");
-      setAway(o?.predictedScore ? String(o.predictedScore.away) : "");
-      setTip(o?.tip ?? "");
-      setHomeWin(o?.winProbability ? String(o.winProbability.home) : "");
-      setDraw(o?.winProbability ? String(o.winProbability.draw) : "");
-      setAwayWin(o?.winProbability ? String(o.winProbability.away) : "");
-      setPreviewText(o?.previewText ?? "");
+      const auto: AutoValues | null = data.auto ?? null;
+      const effective: AutoValues | null = data.effective ?? null;
+
+      // Prefill from the currently-displayed values (override wins over auto).
+      // The admin can see exactly what the public preview shows before editing.
+      const pre = effective ?? auto ?? o ?? null;
+      autoRef.current = auto ?? o ?? null;
+      baselineRef.current = pre;
+
+      setHome(pre?.predictedScore ? String(pre.predictedScore.home) : "");
+      setAway(pre?.predictedScore ? String(pre.predictedScore.away) : "");
+      setTip(pre?.tip ?? "");
+      setHomeWin(pre?.winProbability ? String(pre.winProbability.home) : "");
+      setDraw(pre?.winProbability ? String(pre.winProbability.draw) : "");
+      setAwayWin(pre?.winProbability ? String(pre.winProbability.away) : "");
+      setPreviewText(pre?.previewText ?? "");
+
+      setMessage(
+        effective
+          ? data.hasOverride
+            ? { ok: true, text: "Loaded override — edits below will replace the auto prediction." }
+            : { ok: true, text: "Prefilled from the auto prediction. Only changed fields are saved." }
+          : o
+            ? { ok: true, text: "Loaded override — no auto prediction available for this match." }
+            : null
+      );
+      return true;
     } catch {
       setMessage({ ok: false, text: "Failed to load current override." });
+      return false;
+    }
+  }
+
+  async function openEditor(): Promise<void> {
+    setOpen(true);
+    setMessage(null);
+    setLoading(true);
+    try {
+      await fetchPrefill();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /** Re-fetch and repopulate the form (used after reverting to auto). */
+  async function reloadPrefill(): Promise<void> {
+    setLoading(true);
+    try {
+      await fetchPrefill();
     } finally {
       setLoading(false);
     }
@@ -66,7 +139,7 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
     // The API rejects saves once kickoff has passed (the override would expire
     // immediately and be invisible to the preview). Show that guard client-side
     // too so the admin isn't confused by a failure after the fact.
-    if (new Date(date).getTime() <= Date.now()) {
+    if (new Date(date).getTime() <= Date.now()) { // eslint-disable-line react-hooks/purity -- event-handler runtime check
       setMessage({
         ok: false,
         text: "This match has already kicked off — prediction overrides only apply before kickoff, so the preview can't be updated.",
@@ -95,21 +168,95 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
       return;
     }
 
+    // The current form state as a structured override payload.
+    const current: OverridePayload = {
+      predictedScore: hasScore ? { home: Number(home), away: Number(away) } : null,
+      tip: tip.trim() || null,
+      winProbability: hasWin
+        ? { home: Number(homeWin), draw: Number(draw), away: Number(awayWin) }
+        : null,
+      previewText: previewText.trim() || null,
+    };
+
+    const baseline = baselineRef.current;
+    const auto = autoRef.current;
+    const sameVal = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+    // Which fields did the admin actually change from the prefilled values?
+    const scoreChanged = !sameVal(current.predictedScore, baseline?.predictedScore ?? null);
+    const tipChanged = !sameVal(current.tip, baseline?.tip ?? null);
+    const winChanged = !sameVal(current.winProbability, baseline?.winProbability ?? null);
+    const textChanged = !sameVal(current.previewText, baseline?.previewText ?? null);
+
+    if (!scoreChanged && !tipChanged && !winChanged && !textChanged) {
+      // Flagged match with no edits: clicking Save IS the review action —
+      // publish the current (prefilled) prediction by creating an override.
+      if (needsReview) {
+        const body: Record<string, unknown> = {
+          token, slug, expiresAt: date,
+          predictedScore: current.predictedScore,
+          tip: current.tip,
+          winProbability: current.winProbability,
+          previewText: current.previewText,
+        };
+        await doSave(body);
+        return;
+      }
+      setMessage({ ok: true, text: "No changes made — prediction left as is." });
+      setSaving(false);
+      return;
+    }
+
+    // Build a minimal patch. A changed field that equals the pure auto value is
+    // sent as null (use auto for that field); omitted fields keep the existing
+    // override (or auto when none was set).
+    const patch: OverridePayload = {
+      predictedScore: null,
+      tip: null,
+      winProbability: null,
+      previewText: null,
+    };
+
+    if (scoreChanged) {
+      patch.predictedScore = sameVal(current.predictedScore, auto?.predictedScore ?? null)
+        ? null
+        : current.predictedScore;
+    }
+    if (tipChanged) {
+      patch.tip = sameVal(current.tip, auto?.tip ?? null) ? null : current.tip;
+    }
+    if (winChanged) {
+      patch.winProbability = sameVal(current.winProbability, auto?.winProbability ?? null)
+        ? null
+        : current.winProbability;
+    }
+    if (textChanged) {
+      patch.previewText = sameVal(current.previewText, auto?.previewText ?? null) ? null : current.previewText;
+    }
+
+    const body: Record<string, unknown> = {
+      token,
+      slug,
+      expiresAt: date,
+    };
+    // Only include fields the admin actually changed. Omitted fields keep any
+    // existing override (or auto) — sending null for an untouched field would
+    // wipe a previously saved override for it.
+    if (scoreChanged) body.predictedScore = patch.predictedScore;
+    if (tipChanged) body.tip = patch.tip;
+    if (winChanged) body.winProbability = patch.winProbability;
+    if (textChanged) body.previewText = patch.previewText;
+
+    await doSave(body);
+  }
+
+  /** POST the override payload and update the row warning state on success. */
+  async function doSave(body: Record<string, unknown>): Promise<void> {
     try {
       const res = await fetch("/api/admin/override", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token,
-          slug,
-          expiresAt: date,
-          predictedScore: hasScore ? { home: Number(home), away: Number(away) } : null,
-          tip: tip.trim() || null,
-          winProbability: hasWin
-            ? { home: Number(homeWin), draw: Number(draw), away: Number(awayWin) }
-            : null,
-          previewText: previewText.trim() || null,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data.success) {
@@ -119,6 +266,8 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
             ? "Saved (memory only — database unavailable; will be lost on restart)."
             : "Saved. Preview will refresh on next load.",
         });
+        // Update the row's review warning state from the API's recomputed review.
+        onEdited?.(data.review ?? { flagged: false, reasons: [] });
       } else {
         setMessage({ ok: false, text: data.error || "Save failed." });
       }
@@ -139,10 +288,21 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
       );
       const data = await res.json();
       if (data.success) {
-        setHome(""); setAway(""); setTip("");
-        setHomeWin(""); setDraw(""); setAwayWin("");
+        // Repopulate the fields with the auto (pre-override) values so the admin
+        // sees what will be displayed now that the override is gone.
+        setHome("");
+        setAway("");
+        setTip("");
+        setHomeWin("");
+        setDraw("");
+        setAwayWin("");
         setPreviewText("");
+        autoRef.current = null;
+        baselineRef.current = null;
+        await reloadPrefill();
         setMessage({ ok: true, text: "Override removed. Auto values restored." });
+        // Reverting also refreshes the review warning state.
+        onEdited?.(data.review ?? { flagged: false, reasons: [] });
       } else {
         setMessage({ ok: false, text: data.error || "Revert failed." });
       }
@@ -242,6 +402,25 @@ export default function FixtureEditor({ slug, date, homeTeam, awayTeam, token }:
                         placeholder="Auto"
                       />
                     </label>
+
+                    {/* Recognised tip-format quick-fill buttons */}
+                    <div className="mt-2.5">
+                      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                        <Sparkles className="h-3 w-3" /> Tip formats
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {tipTemplates(homeTeam, awayTeam).map((t) => (
+                          <button
+                            key={t.label}
+                            type="button"
+                            onClick={() => setTip(t.value)}
+                            className="rounded border border-[#002b5c]/25 bg-[#002b5c]/5 px-2 py-1 text-[11px] font-medium text-[#002b5c] transition-colors hover:bg-[#002b5c]/10"
+                          >
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </section>
 
                   <hr className="border-zinc-100" />

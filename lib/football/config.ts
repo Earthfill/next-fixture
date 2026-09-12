@@ -81,9 +81,23 @@ function slugify(name: string): string {
   return name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 }
 
+/**
+ * Deterministic API-Football team-crest URL.
+ * The /players/topscorers, /fixtures, /events etc. endpoints sometimes omit the
+ * team logo, but the media host serves every club crest from its numeric team
+ * id at a stable path — so a missing logo can always be reconstructed locally
+ * with zero extra API calls (e.g. /football/teams/569.png → Club Brugge KV).
+ * Empty/unknown ids return "" so existing empty-logo handling keeps working.
+ */
+export function teamLogo(teamId?: string | number | null): string {
+  const id = String(teamId ?? "").trim();
+  if (id === "") return "";
+  return `https://media.api-sports.io/football/teams/${id}.png`;
+}
+
 // Cup/knockout competitions — tracked for fixtures, but NOT shown in the
 // header/footer league links.
-const CUP_LEAGUE_IDS = new Set([2, 3, 848, 45, 48, 143, 81, 137, 66]);
+const CUP_LEAGUE_IDS = new Set([45, 48, 143, 81, 137, 66]);
 
 // ─── Build lookup maps ───────────────────────────────────────────────────
 
@@ -122,8 +136,57 @@ for (const l of LEAGUE_DATA) {
 // Country display order (for the drawer)
 export const COUNTRY_ORDER = ["Europe", "England", "Scotland", "Spain", "Germany", "Italy", "France", "Netherlands", "Portugal"];
 
+// UEFA club-competition league-phase ids — these DO produce a real league table
+// (used for primary-league selection, ranked below domestic leagues).
+const UEFA_LEAGUE_PHASE_IDS = new Set([2, 3, 848]);
+
+/**
+ * Whether a competition slug yields a real league table (a domestic league or a
+ * UEFA league phase) as opposed to a domestic cup, which only ever has bracket
+ * stages and no meaningful position. Used to pick a sensible primary league for
+ * a team page instead of accidentally landing on a cup.
+ */
+export function hasLeagueStandings(leagueSlug: string | null | undefined): boolean {
+  if (!leagueSlug) return false;
+  const id = SLUG_TO_LEAGUE_ID[leagueSlug];
+  if (id == null) return false;
+  return !CUP_LEAGUE_IDS.has(id);
+}
+
+/**
+ * Priority rank for choosing a team's primary league: domestic leagues ranked
+ * highest, then UEFA league-phase competitions, and domestic cups last.
+ */
+export function primaryCompetitionRank(leagueSlug: string | null | undefined): number {
+  const id = leagueSlug ? SLUG_TO_LEAGUE_ID[leagueSlug] : undefined;
+  if (id == null || CUP_LEAGUE_IDS.has(id)) return 3; // unmapped or cup / no table
+  if (UEFA_LEAGUE_PHASE_IDS.has(id)) return 2; // UCL / UEL / UECL league phase
+  return 1; // domestic league
+}
+
+export function teamSlug(name: string): string {
+  return slugify(name);
+}
+
+/**
+ * Fold common Latin diacritics to ASCII before slugifying, so non-ASCII team
+ * names ("SpVgg Greuther Fürth") produce stable, URL-safe fixture slugs like
+ * "...-vs-spvgg-greuther-furth". Without this, the raw "ü" ends up percent-
+ * encoded in the URL (%C3%BC) while the admin override and cache keys store the
+ * raw character — they stop matching, which breaks revalidation and the
+ * prediction-review flow for any match with an accented team name.
+ */
+export function normalizeSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // strip combining diacritics (é→e, ü→u, ń→n)
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export function generateSlug(id: string, home: string, away: string): string {
-  return `${id}--${home.toLowerCase().replace(/\s+/g, "-")}-vs-${away.toLowerCase().replace(/\s+/g, "-")}`;
+  return `${id}--${normalizeSlug(home)}-vs-${normalizeSlug(away)}`;
 }
 
 export function parseSlug(slug: string): { fixtureId: string | null; homeSlug: string; awaySlug: string } {

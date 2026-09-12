@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "cron": "tsx scripts/cron-worker.ts",
     "job:fixtures": "tsx scripts/run-job.ts fixtures",
+    "stats:round": "tsx scripts/compute-round-stats.ts",
     "check:infra": "tsx scripts/check-infra.ts",
     "migrate": "tsx scripts/migrate.ts"
   },

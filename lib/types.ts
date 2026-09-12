@@ -24,6 +24,7 @@ export interface TeamForm {
     opponent: string;
     result: "W" | "D" | "L";
     score: string;
+    isHome: boolean;
     competition?: string;
     extratime?: { home: number | null; away: number | null };
     penalty?: { home: number | null; away: number | null };

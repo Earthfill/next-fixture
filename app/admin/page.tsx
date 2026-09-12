@@ -5,7 +5,7 @@
 import React from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getUpcomingFixturesFresh } from "@/lib/cache/pages";
+import { getUpcomingFixturesFresh, getPredictionReview } from "@/lib/cache/pages";
 import { buildAvailableMatchdays } from "@/lib/football/service";
 import { getOverriddenSlugs } from "@/lib/admin-overrides";
 import { getHiddenSlugs } from "@/lib/hidden-fixtures";
@@ -15,7 +15,7 @@ import FixtureList from "@/components/admin/FixtureList";
 import ProviderControl from "@/components/admin/ProviderControl";
 import {
   Trophy, Calendar, BarChart3, RefreshCw, ExternalLink,
-  DollarSign, Eye, Pencil, PenLine, CalendarDays, Sparkles, Server,
+  DollarSign, Eye, Pencil, PenLine, CalendarDays, Sparkles, Server, TriangleAlert,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +51,20 @@ export default async function AdminPage() {
   // Hidden count scoped to the fixtures currently in this table (hidden slugs
   // for long-finished matches may linger in the store).
   const totalHidden = fixtures.filter((f) => hiddenSlugs.has(f.slug)).length;
+
+  // Prediction quality review — which fixtures have a betting tip that
+  // contradicts their predicted scoreline or win probability. These are hidden
+  // from the public preview until an admin edits them. Once a fixture has an
+  // admin override it is treated as "reviewed" and is no longer flagged.
+  const reviews = await Promise.all(
+    fixtures.map((f) => getPredictionReview(f.slug).catch(() => null))
+  );
+  const flaggedReasons: Record<string, string[]> = {};
+  reviews.forEach((r, i) => {
+    const f = fixtures[i];
+    if (r?.flagged && f && !overriddenSlugs.has(f.slug)) flaggedReasons[f.slug] = r.reasons;
+  });
+  const totalFlagged = Object.keys(flaggedReasons).length;
 
   // Active sports data provider + each provider's key status (for the switch UI).
   const activeProvider = await getActiveProviderId();
@@ -199,6 +213,27 @@ export default async function AdminPage() {
         </div>
       </div>
 
+      {/* Prediction Review Warning Banner */}
+      {totalFlagged > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+              <TriangleAlert className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-amber-900">
+                {totalFlagged} match{totalFlagged === 1 ? "" : "es"} need prediction review
+              </h2>
+              <p className="mt-0.5 text-xs leading-relaxed text-amber-800">
+                These fixtures have a betting tip that contradicts their predicted scoreline or win probability, so their
+                predictions are hidden from the public site. Edit each match in the table below to fix the prediction and
+                publish it again.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Upcoming Fixtures Table */}
       <div className="rounded-xl border border-zinc-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
@@ -209,7 +244,7 @@ export default async function AdminPage() {
             <div>
               <h2 className="text-sm font-bold text-zinc-900">Upcoming Fixtures</h2>
               <p className="text-xs text-zinc-500">
-                {totalFixtures} matches · {totalMatchdays} matchdays · {totalHidden} hidden · fetched live from API
+                {totalFixtures} matches · {totalMatchdays} matchdays · {totalHidden} hidden · {totalFlagged} need review · fetched live from API
               </p>
             </div>
           </div>
@@ -221,6 +256,7 @@ export default async function AdminPage() {
           fixtures={fixtures}
           overriddenSlugs={Array.from(overriddenSlugs)}
           hiddenSlugs={Array.from(hiddenSlugs)}
+          flaggedReasons={flaggedReasons}
           token={adminToken as string}
         />
       </div>
@@ -236,7 +272,7 @@ export default async function AdminPage() {
         <ul className="text-xs text-zinc-500 space-y-1.5 leading-relaxed">
           <li className="flex items-start gap-2">
             <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#002b5c]" />
-            Each preview page targets long-tail keywords: <strong className="text-zinc-700">"Arsenal vs Chelsea Preview"</strong>
+            Each preview page targets long-tail keywords: <strong className="text-zinc-700">&quot;Arsenal vs Chelsea Preview&quot;</strong>
           </li>
           <li className="flex items-start gap-2">
             <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#002b5c]" />

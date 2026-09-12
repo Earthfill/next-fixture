@@ -12,7 +12,7 @@ import { loadTeams, loadH2H } from "@/lib/football/local";
 import { buildPrediction, generateAnalysis } from "@/lib/football/analysis";
 import {
   LEAGUE_IDS, LEAGUE_ID_TO_NAME, COMPETITION_LOGOS, COMPETITION_SLUGS,
-  LEAGUE_ORDER, generateSlug, parseSlug, normalizeName,
+  LEAGUE_ORDER, generateSlug, parseSlug, normalizeName, teamLogo,
 } from "@/lib/football/config";
 import { toSiteDate } from "@/lib/dates";
 import { redisGet, redisSet, redisDel } from "@/lib/cache/redis";
@@ -356,6 +356,7 @@ export async function getMatchPreviewBySlug(slug: string): Promise<MatchPreview 
         opponent: isHome ? m.teams?.away?.name : m.teams?.home?.name || "",
         result: r,
         score: isHome ? `${hs}-${as}` : `${as}-${hs}`,
+        isHome,
         competition: m.league?.name || "",
         extratime: m.score?.extratime ? { home: m.score.extratime.home, away: m.score.extratime.away } : undefined,
         penalty: m.score?.penalty ? { home: m.score.penalty.home, away: m.score.penalty.away } : undefined,
@@ -374,6 +375,7 @@ export async function getMatchPreviewBySlug(slug: string): Promise<MatchPreview 
         opponent: isHome ? m.teams?.away?.name : m.teams?.home?.name || "",
         result: r,
         score: isHome ? `${hs}-${as}` : `${as}-${hs}`,
+        isHome,
         competition: m.league?.name || "",
         extratime: m.score?.extratime ? { home: m.score.extratime.home, away: m.score.extratime.away } : undefined,
         penalty: m.score?.penalty ? { home: m.score.penalty.home, away: m.score.penalty.away } : undefined,
@@ -455,15 +457,23 @@ export async function getTopScorers(leagueSlug: string, limit: number = 10): Pro
   const data = await apiFetch<any>(`/players/topscorers?league=${league.id}&season=${season}`);
   if (!data?.response?.length) return [];
 
-  return data.response.slice(0, limit).map((s: any, i: number) => ({
-    position: i + 1,
-    player: { name: s.player?.name || "" },
-    team: { id: String(s.statistics?.[0]?.team?.id || ""), name: s.statistics?.[0]?.team?.name || "", shortName: (s.statistics?.[0]?.team?.name || "").substring(0, 3).toUpperCase(), logo: s.statistics?.[0]?.team?.logo || "" },
-    goals: s.statistics?.[0]?.goals?.total || 0,
-    assists: s.statistics?.[0]?.goals?.assists || 0,
-    penalties: s.statistics?.[0]?.penalty?.scored || 0,
-    appearances: s.statistics?.[0]?.games?.appearences || 0,
-  }));
+  return data.response.slice(0, limit).map((s: any, i: number) => {
+    const t = s.statistics?.[0]?.team;
+    return {
+      position: i + 1,
+      player: { name: s.player?.name || "" },
+      team: {
+        id: String(t?.id || ""),
+        name: t?.name || "",
+        shortName: (t?.name || "").substring(0, 3).toUpperCase(),
+        logo: t?.logo || teamLogo(t?.id),
+      },
+      goals: s.statistics?.[0]?.goals?.total || 0,
+      assists: s.statistics?.[0]?.goals?.assists || 0,
+      penalties: s.statistics?.[0]?.penalty?.scored || 0,
+      appearances: s.statistics?.[0]?.games?.appearences || 0,
+    };
+  });
 }
 
 export async function getTopAssists(leagueSlug: string, limit: number = 10): Promise<TopScorer[]> {
@@ -477,15 +487,23 @@ export async function getTopAssists(leagueSlug: string, limit: number = 10): Pro
   const data = await apiFetch<any>(`/players/topassists?league=${league.id}&season=${season}`);
   if (!data?.response?.length) return [];
 
-  return data.response.slice(0, limit).map((s: any, i: number) => ({
-    position: i + 1,
-    player: { name: s.player?.name || "" },
-    team: { id: String(s.statistics?.[0]?.team?.id || ""), name: s.statistics?.[0]?.team?.name || "", shortName: (s.statistics?.[0]?.team?.name || "").substring(0, 3).toUpperCase(), logo: s.statistics?.[0]?.team?.logo || "" },
-    goals: s.statistics?.[0]?.goals?.total || 0,
-    assists: s.statistics?.[0]?.goals?.assists || 0,
-    penalties: s.statistics?.[0]?.penalty?.scored || 0,
-    appearances: s.statistics?.[0]?.games?.appearences || 0,
-  }));
+  return data.response.slice(0, limit).map((s: any, i: number) => {
+    const t = s.statistics?.[0]?.team;
+    return {
+      position: i + 1,
+      player: { name: s.player?.name || "" },
+      team: {
+        id: String(t?.id || ""),
+        name: t?.name || "",
+        shortName: (t?.name || "").substring(0, 3).toUpperCase(),
+        logo: t?.logo || teamLogo(t?.id),
+      },
+      goals: s.statistics?.[0]?.goals?.total || 0,
+      assists: s.statistics?.[0]?.goals?.assists || 0,
+      penalties: s.statistics?.[0]?.penalty?.scored || 0,
+      appearances: s.statistics?.[0]?.games?.appearences || 0,
+    };
+  });
 }
 
 export async function getPastResults(leagueSlug: string, limit: number = 10): Promise<Fixture[]> {
@@ -536,6 +554,58 @@ export async function getTeamUpcomingFixtures(
   return data.response
     .map(apiFixtureToFixture)
     .filter((f: Fixture | null): f is Fixture => f !== null);
+}
+
+// ─── Recent results for a team (finished matches, newest first) ─────
+
+export async function getTeamRecentResults(
+  teamId: number,
+  count: number = 8
+): Promise<Fixture[]> {
+  if (!hasApi()) return [];
+
+  const leagues = await getCoveredLeagues();
+  const season = leagues[0]?.season;
+  if (!season) return [];
+
+  const data = await apiFetch<{ response: any[] }>(
+    `/fixtures?team=${teamId}&season=${season}&status=ft&last=${count}`
+  );
+  if (!data?.response?.length) return [];
+
+  return data.response
+    .map(apiFixtureToFixture)
+    .filter((f: Fixture | null): f is Fixture => f !== null)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+// ─── Head-to-head by team ids (API backed; local JSON fallback is empty) ─
+
+export async function getTeamHeadToHeadByIds(
+  teamAId: number,
+  teamBId: number,
+  count: number = 6
+): Promise<HeadToHeadMatch[]> {
+  if (!hasApi() || !teamAId || !teamBId) return [];
+
+  const data = await apiFetch<{ response: any[] }>(
+    `/fixtures/headtohead?h2h=${teamAId}-${teamBId}&last=${count}`
+  );
+  if (!data?.response?.length) return [];
+
+  return data.response
+    .map((m: any): HeadToHeadMatch | null => {
+      if (!m?.teams?.home?.name || !m?.teams?.away?.name) return null;
+      return {
+        date: m.fixture?.date || "",
+        homeTeam: m.teams.home.name,
+        awayTeam: m.teams.away.name,
+        homeScore: m.goals?.home ?? 0,
+        awayScore: m.goals?.away ?? 0,
+        competition: LEAGUE_ID_TO_NAME[m.league?.id] || m.league?.name || "",
+      };
+    })
+    .filter((m: HeadToHeadMatch | null): m is HeadToHeadMatch => m !== null);
 }
 
 // ─── Raw fixture range fetcher (used by cache layer + cron jobs) ──────

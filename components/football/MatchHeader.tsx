@@ -3,9 +3,11 @@
 // ---------------------------------------------------------------------------
 
 import Image from "next/image";
+import Link from "next/link";
 import React from "react";
 import { Calendar, Clock, MapPin } from "lucide-react";
 import type { Fixture } from "@/lib/sports-api";
+import { teamSlug } from "@/lib/football/config";
 
 interface MatchHeaderProps {
   match: Fixture;
@@ -63,7 +65,9 @@ export default function MatchHeader({ match }: MatchHeaderProps) {
         <div className="flex items-center justify-center gap-6 py-4 flex-1">
           <div className="flex items-center gap-2">
             <Image src={homeTeam.logo} alt={`${homeTeam.name} logo`} width={36} height={36} className="sm-crest-lg" />
-            <span className="text-sm font-bold text-zinc-800">{homeTeam.name}</span>
+            <Link href={`/teams/${teamSlug(homeTeam.name)}`} prefetch={false} className="text-sm font-bold text-zinc-800 hover:text-blue-700 hover:underline transition-colors">
+              {homeTeam.name}
+            </Link>
             {match.score ? <span className={`${homeWin ? 'font-bold text-zinc-800' : ''}`}>{match.score.home}</span> : <span className="text-[10px] uppercase text-zinc-400 ml-1">(H)</span>}
           </div>
 
@@ -71,7 +75,9 @@ export default function MatchHeader({ match }: MatchHeaderProps) {
 
           <div className="flex items-center gap-2">
             {match.score ? <span className={`${awayWin ? 'font-bold text-zinc-800' : ''}`}>{match.score.away}</span> : <span className="text-[10px] uppercase text-zinc-400 mr-1">(A)</span>}
-            <span className="text-sm font-bold text-zinc-800">{awayTeam.name}</span>
+            <Link href={`/teams/${teamSlug(awayTeam.name)}`} prefetch={false} className="text-sm font-bold text-zinc-800 hover:text-blue-700 hover:underline transition-colors">
+              {awayTeam.name}
+            </Link>
             <Image src={awayTeam.logo} alt={`${awayTeam.name} logo`} width={36} height={36} className="sm-crest-lg" />
           </div>
         </div>

@@ -2,10 +2,12 @@
 // League Page — Simple standings & fixtures
 // ---------------------------------------------------------------------------
 import Image from "next/image";
+import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getLeagueStandings, getTopScorers, getTopAssists, getPastResults, getYouTubeHighlights } from "@/lib/cache/pages";
+import { getLeagueStandings, getTopScorers, getTopAssists, getLeagueRoundStats, getPastResults, getYouTubeHighlights } from "@/lib/cache/pages";
 import { getFootballNews } from "@/lib/news";
+import { teamSlug } from "@/lib/football/config";
 import { Goal } from "lucide-react";
 import NewsSection from "@/components/football/NewsSection";
 import PastResults from "@/components/football/PastResults";
@@ -52,8 +54,19 @@ export default async function LeaguePage({ params }: { params: Promise<{ "league
 
   const { league, standings, upcomingFixtures } = data;
   const hasStandings = standings.length > 0;
-  const scorers = await getTopScorers(s, 10);
-  const assists = await getTopAssists(s, 10);
+
+  // For the UEFA league-phase competitions, show per-matchday top scorers /
+  // assist providers computed from that round's goal events (NOT the cumulative
+  // /players endpoints). Domestic leagues keep the season-cumulative data.
+  const IS_UEFA = s === "champions-league" || s === "europa-league" || s === "conference-league";
+  const roundStats = IS_UEFA ? await getLeagueRoundStats(s) : null;
+  const scorers =
+    roundStats != null ? roundStats.scorers.slice(0, 10) : IS_UEFA ? [] : await getTopScorers(s, 10);
+  const assists =
+    roundStats != null ? roundStats.assisters.slice(0, 10) : IS_UEFA ? [] : await getTopAssists(s, 10);
+  const matchday = roundStats?.round ?? null;
+  const hasKnockouts = roundStats?.hasKnockouts ?? false;
+
   const { articles: news } = await getFootballNews();
   const pastResults = await getPastResults(s, 12);
 
@@ -113,7 +126,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ "league
                   {standings.map(st => (
                     <tr key={st.team.id}>
                       <td className={`text-left font-bold text-sm ${st.position <= 4 ? 'text-green-600' : 'text-zinc-500'}`}>{st.position}</td>
-                      <td><span className="text-sm font-medium text-zinc-800">{st.team.name}</span></td>
+                      <td><Link href={`/teams/${teamSlug(st.team.name)}`} className="text-sm font-medium text-zinc-800 hover:text-[#002b5c] hover:underline transition-colors">{st.team.name}</Link></td>
                       <td className="text-sm text-zinc-600">{st.played}</td>
                       <td className="text-sm text-zinc-600">{st.won}</td>
                       <td className="text-sm text-zinc-600">{st.drawn}</td>
@@ -188,6 +201,11 @@ export default async function LeaguePage({ params }: { params: Promise<{ "league
                   <h2 className="sm-section-heading flex items-center gap-2">
                     <Goal className="h-4 w-4" />
                     Top Scorers
+                    {hasKnockouts
+                      ? <span className="text-xs font-normal text-zinc-400">· Full Season</span>
+                      : matchday
+                        ? <span className="text-xs font-normal text-zinc-400">· Through Matchday {matchday}</span>
+                        : null}
                   </h2>
                   <div className="border border-zinc-200 bg-white">
                     {scorersData.map((scorer, i) => {
@@ -239,6 +257,11 @@ export default async function LeaguePage({ params }: { params: Promise<{ "league
                 <h2 className="sm-section-heading flex items-center gap-2">
                   <Goal className="h-4 w-4" />
                   Top Assists
+                  {hasKnockouts
+                    ? <span className="text-xs font-normal text-zinc-400">· Full Season</span>
+                    : matchday
+                      ? <span className="text-xs font-normal text-zinc-400">· Through Matchday {matchday}</span>
+                      : null}
                 </h2>
                 <div className="border border-zinc-200 bg-white">
                   {assists.map((player, i) => {

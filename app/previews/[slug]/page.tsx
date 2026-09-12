@@ -9,10 +9,12 @@ import TacticalAnalysis from "@/components/football/TacticalAnalysis";
 import HeadToHeadTable from "@/components/football/HeadToHeadTable";
 import FormGuide from "@/components/football/FormGuide";
 import OddsWidget from "@/components/football/OddsWidget";
-import { getFixtureLineups, getTeamUpcomingFixtures, getLeagueStandings, getFixtureOdds } from "@/lib/cache/pages";
+import { getFixtureLineups, getTeamUpcomingFixtures, getLeagueStandings, getFixtureOdds, writePredictionReview } from "@/lib/cache/pages";
+import { evaluatePrediction } from "@/lib/prediction-review";
 import { computePrediction } from "@/lib/football/win-probability";
 import { generateNlgAnalysis } from "@/lib/football/nlg-analysis";
 import { getAdminOverride } from "@/lib/admin-overrides";
+import { normalizeSlug } from "@/lib/football/config";
 import AdSlot from "@/components/common/AdSlot";
 import { AD_SLOTS } from "@/lib/ads";
 import PredictionCard from "@/components/football/PredictionCard";
@@ -20,13 +22,14 @@ import WinProbability from "@/components/football/WinProbability";
 import TeamNews from "@/components/football/TeamNews";
 import UpcomingFixtures from "@/components/football/UpcomingFixtures";
 
-export const revalidate = 7200; // 2 hours
+export const dynamic = "force-dynamic"; // admin overrides must render live — no ISR HTML cache
 export const maxDuration = 60; // Vercel: allow up to 60s for the cold-cache API fetch
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL as string;
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const { slug } = await params;
+  const { slug: rawSlug } = await params;
+  const slug = normalizeSlug(rawSlug);
   const preview = await getMatchPreviewBySlug(slug);
   if (!preview) return { title: "Preview Not Found", robots: { index: false } };
 
@@ -54,7 +57,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 }
 
 export default async function MatchPreviewPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
+  const { slug: rawSlug } = await params;
+  const slug = normalizeSlug(rawSlug);
   const preview = await getMatchPreviewBySlug(slug);
   if (!preview) notFound();
 
@@ -120,6 +124,33 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
   // Admin-written preview text replaces the generated analysis entirely.
   const analysisText = override?.previewText?.trim() || alignedAnalysis;
 
+  // ─── Prediction quality gate (tip ↔ scoreline ↔ win-probability) ──────
+  // Auto-computed predictions that fail the consistency check stay hidden
+  // ("under review") until an admin explicitly edits the match. Once ANY
+  // override field is set the admin has reviewed that prediction and it is
+  // treated as authoritative — it gets published.
+  // `prediction` here is the auto payload; `override` is the admin edit.
+  const overrideHasPrediction = Boolean(
+    override?.predictedScore || override?.tip || override?.winProbability || override?.previewText
+  );
+  const review = evaluatePrediction(
+    tip,
+    {
+      predictedScore,
+      winProbability: { home: homeWin, draw, away: awayWin },
+      btts: prediction?.btts ?? null,
+      overUnder: prediction?.overUnder ?? null,
+    },
+    fixture.homeTeam.name,
+    fixture.awayTeam.name,
+    fixture.homeTeam.shortName,
+    fixture.awayTeam.shortName
+  );
+  const predictionBlocked = review.flagged && !overrideHasPrediction;
+
+  // Persist the authoritative review result so the admin table reads it from cache.
+  void writePredictionReview(slug, { flagged: review.flagged, reasons: review.reasons, available: true });
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "SportsEvent",
@@ -140,7 +171,7 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
         <MatchHeader match={fixture} />
 
         {/* 2. Prediction */}
-        {tip !== "No predictions available" && (
+        {!predictionBlocked && tip !== "No predictions available" && (
           <div className="mt-6">
             <PredictionCard
               homeTeam={fixture.homeTeam.shortName}
@@ -151,52 +182,67 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
           </div>
         )}
 
+        {/* Prediction review notice — shown in place of hidden prediction sections */}
+        {predictionBlocked && (
+          <div className="mt-6 rounded border border-amber-300 bg-amber-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-amber-800">Prediction Under Review</p>
+            <p className="mt-0.5 text-sm leading-relaxed text-amber-800">
+              Our editors are checking this match&apos;s prediction before it is published. The winning tip and probability
+              will appear here once they are verified.
+            </p>
+          </div>
+        )}
+
         {/* 3. Win Probability + Ad */}
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:block">
-          <div className="lg:mr-80">
-            <WinProbability
-              homeWin={homeWin}
-              draw={draw}
-              awayWin={awayWin}
-              homeTeam={fixture.homeTeam.shortName}
-              awayTeam={fixture.awayTeam.shortName}
-            />
+        {!predictionBlocked && (
+          <div className="mt-6 grid grid-cols-1 gap-6 lg:block">
+            <div className="lg:mr-80">
+              <WinProbability
+                homeWin={homeWin}
+                draw={draw}
+                awayWin={awayWin}
+                homeTeam={fixture.homeTeam.shortName}
+                awayTeam={fixture.awayTeam.shortName}
+              />
+            </div>
+            <div className="flex items-start justify-center min-w-0">
+              {/* <AdSlot slotId="preview-rect-1" {...AD_SLOTS["preview-rect-1"]} /> */}
+            </div>
           </div>
-          <div className="flex items-start justify-center min-w-0">
-            {/* <AdSlot slotId="preview-rect-1" {...AD_SLOTS["preview-rect-1"]} /> */}
-          </div>
-        </div>
+        )}
 
         <hr className="sm-divider clear-both" />
 
         {/* 4. Tactical analysis */}
-        {tip !== "No predictions available" && (
+        {!predictionBlocked && tip !== "No predictions available" && (
           <div className="mt-6">
             <TacticalAnalysis analysis={analysisText} homeTeam={fixture.homeTeam.name} awayTeam={fixture.awayTeam.name} />
+            <hr className="sm-divider" />
           </div>
         )}
 
-        <hr className="sm-divider" />
 
         {/* 5. Team News */}
-        <div className="mt-6">
-          <TeamNews
-            homeTeam={fixture.homeTeam.name}
-            awayTeam={fixture.awayTeam.name}
-            homeNews={homeNews ?? []}
-            awayNews={awayNews ?? []}
-            lineups={lineups}
-          />
-        </div>
+        {lineups[1].startXI.length > 1 && (
+          <div className="mt-6">
+            <TeamNews
+              homeTeam={fixture.homeTeam.name}
+              awayTeam={fixture.awayTeam.name}
+              homeNews={homeNews ?? []}
+              awayNews={awayNews ?? []}
+              lineups={lineups}
+            />
 
-        <hr className="sm-divider" />
+            <hr className="sm-divider" />
+          </div>
+        )}
 
         {/* 7. Head-to-head */}
         <div className="mt-6">
           <HeadToHeadTable matches={headToHead} homeTeam={fixture.homeTeam.name} awayTeam={fixture.awayTeam.name} />
+          <hr className="sm-divider" />
         </div>
 
-        <hr className="sm-divider" />
 
         {/* 8. Form guides */}
         <div className="mt-6 grid gap-6 sm:grid-cols-2">

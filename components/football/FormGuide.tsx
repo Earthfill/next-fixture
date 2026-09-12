@@ -33,7 +33,12 @@ export default function FormGuide({ form }: { form: TeamForm }) {
           {form.recentMatches.map((m, i) => (
             <div key={i}>
               <div className="flex justify-between items-center">
-                <span className="truncate">{m.opponent}</span>
+                <span className="truncate">
+                  {m.opponent}{" "}
+                  <span className="font-bold text-xs ml-1">
+                    ({m.isHome ? "H" : "A"})
+                  </span>
+                </span>
                 <span className={`font-medium shrink-0 ml-2 ${m.result === 'W' ? 'text-green-600' : m.result === 'D' ? 'text-amber-600' : 'text-red-600'}`}>
                   {m.score}{formatExtra(m)}
                 </span>
