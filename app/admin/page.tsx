@@ -225,9 +225,8 @@ export default async function AdminPage() {
                 {totalFlagged} match{totalFlagged === 1 ? "" : "es"} need prediction review
               </h2>
               <p className="mt-0.5 text-xs leading-relaxed text-amber-800">
-                These fixtures have a betting tip that contradicts their predicted scoreline or win probability, so their
-                predictions are hidden from the public site. Edit each match in the table below to fix the prediction and
-                publish it again.
+                These fixtures have a betting tip that contradicts their predicted scoreline or win probability, so they are
+                hidden from the public site. Edit each match in the table below to fix the prediction and publish it again.
               </p>
             </div>
           </div>

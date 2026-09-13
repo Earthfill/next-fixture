@@ -9,7 +9,7 @@ import TacticalAnalysis from "@/components/football/TacticalAnalysis";
 import HeadToHeadTable from "@/components/football/HeadToHeadTable";
 import FormGuide from "@/components/football/FormGuide";
 import OddsWidget from "@/components/football/OddsWidget";
-import { getFixtureLineups, getTeamUpcomingFixtures, getLeagueStandings, getFixtureOdds, writePredictionReview } from "@/lib/cache/pages";
+import { getFixtureLineups, getTeamUpcomingFixtures, getLeagueStandings, getFixtureOdds, writePredictionReview, getPredictionReview } from "@/lib/cache/pages";
 import { evaluatePrediction } from "@/lib/prediction-review";
 import { computePrediction } from "@/lib/football/win-probability";
 import { generateNlgAnalysis } from "@/lib/football/nlg-analysis";
@@ -32,6 +32,19 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const slug = normalizeSlug(rawSlug);
   const preview = await getMatchPreviewBySlug(slug);
   if (!preview) return { title: "Preview Not Found", robots: { index: false } };
+
+  // A match that still needs admin review is hidden → keep it out of search
+  // indexes so the pending-review/404 page isn't indexed or shared as live.
+  const [override, review] = await Promise.all([
+    getAdminOverride(slug),
+    getPredictionReview(slug).catch(() => null),
+  ]);
+  const hasOverride = Boolean(
+    override?.predictedScore || override?.tip || override?.winProbability || override?.previewText
+  );
+  if (review?.flagged && !hasOverride) {
+    return { title: "Preview Not Found", robots: { index: false, follow: false } };
+  }
 
   const { fixture } = preview;
   return {
@@ -67,6 +80,19 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
   // Admin override (scoreline / tip / win-probability / preview text) — wins
   // over auto-computed values until the match date elapses.
   const override = await getAdminOverride(slug);
+
+  // Has the admin saved any override field? An override marks the match as
+  // "reviewed" — it becomes public regardless of the quality gate.
+  const overrideHasPrediction = Boolean(
+    override?.predictedScore || override?.tip || override?.winProbability || override?.previewText
+  );
+
+  // ─── Review gate — hide the whole match until it has been reviewed ─────
+  // A fixture whose auto prediction fails the quality gate stays private until
+  // an admin edits it (creating an override). We use the cached authoritative
+  // review here so a hidden match isn't forced through the heavy fetches below.
+  const reviewGate = await getPredictionReview(slug).catch(() => null);
+  if (reviewGate?.flagged && !overrideHasPrediction) notFound();
 
   const compSlug = fixture.competition.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
   const homeId = parseInt(fixture.homeTeam.id);
@@ -130,9 +156,6 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
   // override field is set the admin has reviewed that prediction and it is
   // treated as authoritative — it gets published.
   // `prediction` here is the auto payload; `override` is the admin edit.
-  const overrideHasPrediction = Boolean(
-    override?.predictedScore || override?.tip || override?.winProbability || override?.previewText
-  );
   const review = evaluatePrediction(
     tip,
     {

@@ -16,8 +16,8 @@
 
 import { cacheAside, writeCache, peekCache, invalidateCache } from "@/lib/cache";
 import { predictionReviewKey, standingsKey, upcomingFixturesKey, UPCOMING_DAYS, TTL } from "@/lib/cache/keys";
-import { filterHidden, isSlugHidden } from "@/lib/hidden-fixtures";
-import { getAdminOverride } from "@/lib/admin-overrides";
+import { getHiddenSlugs, isSlugHidden } from "@/lib/hidden-fixtures";
+import { getAdminOverride, getOverriddenSlugs } from "@/lib/admin-overrides";
 import { evaluatePrediction } from "@/lib/prediction-review";
 import { normalizeSlug } from "@/lib/football/config";
 
@@ -49,7 +49,44 @@ import { generateNlgAnalysis } from "@/lib/football/nlg-analysis";
 import { computeRoundGoalStats } from "@/lib/football/round-stats";
 import type { SquadPlayerWithRating } from "@/lib/types";
 
-/** Upcoming fixtures across all covered leagues (24h). Hidden matches excluded. */
+/**
+ * Public visibility gate for fixture lists. Returns only items that should be
+ * visible to site visitors:
+ *   - manually hidden matches are always dropped, and
+ *   - matches flagged for admin review are dropped unless they have already
+ *     been reviewed (an admin override counts as "reviewed").
+ */
+export async function filterPublicVisible<T extends { slug?: string }>(items: T[]): Promise<T[]> {
+  if (!items || items.length === 0) return items;
+  const slugs = items.map((i) => i.slug).filter((s): s is string => Boolean(s));
+  if (slugs.length === 0) return items;
+
+  const [manualHidden, overridden] = await Promise.all([
+    getHiddenSlugs(),
+    getOverriddenSlugs(slugs),
+  ]);
+  const overriddenSet = new Set(overridden.map((s) => canonicalSlug(s)));
+
+  // Resolve each fixture's review state in parallel (reads only cached data).
+  const reviews = await Promise.all(slugs.map((s) => getPredictionReview(s).catch(() => null)));
+  const reviewBySlug = new Map<string, PredictionReviewResult>();
+  reviews.forEach((r, i) => {
+    const s = slugs[i];
+    if (r && s) reviewBySlug.set(canonicalSlug(s), r);
+  });
+
+  return items.filter((item) => {
+    if (!item.slug) return true;
+    const key = canonicalSlug(item.slug);
+    if (manualHidden.has(key)) return false;
+    // Flagged for admin review but not yet reviewed (no override) → hidden by
+    // default until an admin actually reviews/edits it.
+    if (!overriddenSet.has(key) && reviewBySlug.get(key)?.flagged) return false;
+    return true;
+  });
+}
+
+/** Upcoming fixtures across all covered leagues (24h). Hidden + pending-review matches excluded. */
 export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
   const days = value ?? UPCOMING_DAYS;
   const { data } = await cacheAside<Fixture[]>(
@@ -57,7 +94,7 @@ export async function getUpcomingFixtures(value?: number): Promise<Fixture[]> {
     TTL.fixtures,
     () => getUpcomingFixturesRaw(days).then((r) => r ?? [])
   );
-  return filterHidden(data ?? []);
+  return filterPublicVisible(data ?? []);
 }
 
 /**
@@ -105,7 +142,7 @@ export async function getLeagueStandings(leagueSlug: string): Promise<LeagueData
   if (data.upcomingFixtures && data.upcomingFixtures.length > 0) {
     return {
       ...data,
-      upcomingFixtures: await filterHidden(data.upcomingFixtures),
+      upcomingFixtures: await filterPublicVisible(data.upcomingFixtures),
     };
   }
   return data;
@@ -144,7 +181,7 @@ export async function getPastResults(leagueSlug: string, limit?: number): Promis
     () => getPastResultsRaw(leagueSlug, lim).then((r) => r ?? [])
   );
 
-  return filterHidden(data ?? []);
+  return filterPublicVisible(data ?? []);
 }
 
 /**
@@ -172,7 +209,7 @@ export async function getTeamUpcomingFixtures(teamId: number, count?: number): P
     () => getTeamUpcomingFixturesRaw(teamId, c).then((r) => r ?? [])
   );
 
-  return filterHidden(data ?? []);
+  return filterPublicVisible(data ?? []);
 }
 
 /** Lineups for a fixture (confirmed + predicted fallback; 10m TTL. */

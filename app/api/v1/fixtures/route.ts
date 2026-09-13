@@ -12,7 +12,7 @@ import { cacheAside } from "@/lib/cache";
 import { fixturesKey, TTL } from "@/lib/cache/keys";
 import { fetchFixtures } from "@/lib/cache/fetchers";
 import { siteToday } from "@/lib/dates";
-import { getHiddenSlugs } from "@/lib/hidden-fixtures";
+import { filterPublicVisible } from "@/lib/cache/pages";
 import { checkRateLimit } from "@/lib/api/rate-limiter";
 import { getQuota } from "@/lib/football/api";
 
@@ -52,9 +52,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // 3b. Drop matches the admin has hidden from the public site.
-  const hidden = await getHiddenSlugs();
-  const visible = hidden.size > 0 ? data.filter((f) => !hidden.has(f.slug)) : data;
+  // 3b. Drop matches the admin has hidden from the public site, plus matches
+  // that still need an admin review (they stay private until reviewed).
+  const visible = await filterPublicVisible(data);
 
   // 4. Paginate in-memory
   const total = visible.length;

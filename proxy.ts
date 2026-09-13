@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Middleware — admin gate + CORS for the public API (/api/v1/*)
+// Proxy — admin gate + CORS for the public API (/api/v1/*)
 // ---------------------------------------------------------------------------
 // 1. /admin is only reachable via the /earthfill handshake (a short-lived
 //    nf_admin_key cookie set by that route). Everything else bounces to /.
@@ -25,7 +25,7 @@ const CORS_HEADERS = {
   "Access-Control-Max-Age": "86400",
 };
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 1. Admin gate — /admin is only reachable via the /earthfill handshake.

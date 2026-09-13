@@ -95,8 +95,7 @@ SITE_TIMEZONE=Africa/Lagos
 - Rate limiting is a **Redis-backed fixed-window limiter** per IP + scope (shared across
   serverless instances; falls back to in-memory if Redis is down). Defaults: 120 req/min/IP;
   override with `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW`.
-- CORS is enabled for all `/api/*` routes via `middleware.ts` (Next.js v16 suggests renaming
-  to `proxy.ts` for new projects).
+- CORS is enabled for all `/api/*` routes via `proxy.ts`.
 - All cache layers degrade gracefully — if Redis or PostgreSQL are unreachable, the app
   continues with the remaining tiers and never crashes.
 - API-Football calls are protected by a circuit breaker (3 failures in 60s → open for 30s),

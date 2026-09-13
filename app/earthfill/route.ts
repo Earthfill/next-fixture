@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // GET /earthfill - secret entry point to the admin dashboard.
 // ---------------------------------------------------------------------------
-// Sets a short-lived cookie, then redirects to /admin. middleware.ts only
+// Sets a short-lived cookie, then redirects to /admin. proxy.ts only
 // allows /admin when that cookie is present, so the admin panel is reachable
 // exclusively through this handshake.
 // ---------------------------------------------------------------------------

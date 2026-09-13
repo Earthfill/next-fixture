@@ -296,7 +296,9 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, fl
               rows.map((f) => {
                 const edited = editedSet.has(f.slug);
                 const hidden = hiddenSet.has(f.slug);
+                const flagged = Boolean(flaggedMap[f.slug]?.length);
                 const busy = busySlug === f.slug;
+                const viewDisabled = hidden || flagged;
                 return (
                   <tr key={f.id} className={`hover:bg-zinc-50/70 ${hidden ? "bg-red-50/40" : ""}`}>
                     <td className="px-5 py-3 whitespace-nowrap">
@@ -326,6 +328,10 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, fl
                         <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
                           <EyeOff className="h-3 w-3" /> Hidden
                         </span>
+                      ) : flagged ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                          <TriangleAlert className="h-3 w-3" /> Under review
+                        </span>
                       ) : edited ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
                           <Pencil className="h-3 w-3" /> Edited
@@ -340,9 +346,9 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, fl
                       <Link
                         href={`/previews/${f.slug}`}
                         prefetch={false}
-                        className={`mr-2 inline-flex items-center gap-1 text-xs font-medium ${hidden ? "text-zinc-300" : "text-[#002b5c] hover:underline"}`}
-                        aria-disabled={hidden}
-                        onClick={(e) => { if (hidden) e.preventDefault(); }}
+                        className={`mr-2 inline-flex items-center gap-1 text-xs font-medium ${viewDisabled ? "text-zinc-300" : "text-[#002b5c] hover:underline"}`}
+                        aria-disabled={viewDisabled}
+                        onClick={(e) => { if (viewDisabled) e.preventDefault(); }}
                       >
                         <ExternalLink className="h-3 w-3" /> View
                       </Link>
