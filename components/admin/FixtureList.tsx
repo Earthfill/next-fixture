@@ -94,7 +94,7 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, fl
       if (competition && f.competition !== competition) return false;
       if (stateFilter === "edited" && !editedSet.has(f.slug)) return false;
       if (stateFilter === "auto" && editedSet.has(f.slug)) return false;
-      if (stateFilter === "hidden" && !hiddenSet.has(f.slug)) return false;
+      if (stateFilter === "hidden" && !(hiddenSet.has(f.slug) || Boolean(flaggedMap[f.slug]?.length))) return false;
       if (stateFilter === "review" && !(flaggedMap[f.slug]?.length)) return false;
       if (q) {
         const haystack =
@@ -105,8 +105,10 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, fl
     });
 
     const sign = sortDir === "asc" ? 1 : -1;
-    // Hidden sorts above Edited above Auto.
-    const stateVal = (f: Fixture) => (hiddenSet.has(f.slug) ? 2 : 0) + (editedSet.has(f.slug) ? 1 : 0);
+    // Hidden (manually hidden or flagged for review) sorts above Edited above Auto.
+    const stateVal = (f: Fixture) =>
+      (hiddenSet.has(f.slug) || Boolean(flaggedMap[f.slug]?.length) ? 2 : 0) +
+      (editedSet.has(f.slug) ? 1 : 0);
 
     return filtered.sort((a, b) => {
       switch (sortKey) {
@@ -126,7 +128,18 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, fl
 
   async function toggleHidden(f: Fixture): Promise<void> {
     if (busySlug) return;
-    const willHide = !hiddenSet.has(f.slug);
+    const manualHidden = hiddenSet.has(f.slug);
+    const reviewHidden = Boolean(flaggedMap[f.slug]?.length);
+    // Hidden because it still needs prediction review (not manually hidden):
+    // publishing happens through editing the match, not the hide toggle.
+    if (!manualHidden && reviewHidden) {
+      setActionMessage({
+        ok: false,
+        text: `"${f.homeTeam.name} vs ${f.awayTeam.name}" is hidden because its prediction needs review. Use Edit to fix the prediction and it will be published automatically.`,
+      });
+      return;
+    }
+    const willHide = !manualHidden;
     setBusySlug(f.slug);
     setActionMessage(null);
     try {
@@ -178,6 +191,12 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, fl
   };
 
   const hasFilters = query !== "" || competition !== "" || stateFilter !== "all";
+
+  // Matches either manually hidden OR flagged for review are treated as hidden
+  // from the public — their Hide status counts as active across the table.
+  const hiddenCount = fixtures.filter(
+    (f) => hiddenSet.has(f.slug) || Boolean(flaggedMap[f.slug]?.length)
+  ).length;
 
   const clearFilters = () => {
     setQuery("");
@@ -231,8 +250,8 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, fl
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-zinc-500">
             {rows.length} of {fixtures.length} matches
-            {hiddenSet.size > 0 ? ` · ${hiddenSet.size} hidden` : ""}
-            {Object.keys(flaggedMap).length > 0 ? ` · ${Object.keys(flaggedMap).length} flagged` : ""}
+            {hiddenCount > 0 ? ` · ${hiddenCount} hidden` : ""}
+            {Object.keys(flaggedMap).length > 0 ? ` · ${Object.keys(flaggedMap).length} need review` : ""}
           </span>
           {hasFilters && (
             <button
@@ -295,10 +314,14 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, fl
             ) : (
               rows.map((f) => {
                 const edited = editedSet.has(f.slug);
-                const hidden = hiddenSet.has(f.slug);
-                const flagged = Boolean(flaggedMap[f.slug]?.length);
+                const manualHidden = hiddenSet.has(f.slug);
+                const reviewHidden = Boolean(flaggedMap[f.slug]?.length);
+                // "Hidden" reflects the public state: manually hidden OR still
+                // awaiting admin review (review-hidden). Hide status is active
+                // for both until the match is edited/published.
+                const hidden = manualHidden || reviewHidden;
                 const busy = busySlug === f.slug;
-                const viewDisabled = hidden || flagged;
+                const viewDisabled = hidden;
                 return (
                   <tr key={f.id} className={`hover:bg-zinc-50/70 ${hidden ? "bg-red-50/40" : ""}`}>
                     <td className="px-5 py-3 whitespace-nowrap">
@@ -327,10 +350,12 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, fl
                       {hidden ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
                           <EyeOff className="h-3 w-3" /> Hidden
-                        </span>
-                      ) : flagged ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-                          <TriangleAlert className="h-3 w-3" /> Under review
+                          {reviewHidden ? (
+                            <TriangleAlert
+                              className="h-3 w-3 text-amber-600"
+                              aria-label="Prediction needs review — hidden until edited"
+                            />
+                          ) : null}
                         </span>
                       ) : edited ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">

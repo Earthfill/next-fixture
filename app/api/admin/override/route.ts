@@ -172,7 +172,14 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // The home page, /fixtures and league/team listings are ISR-cached; without
+  // invalidating them an edited (previously hidden) match stays off the public
+  // site until the 3h revalidate ticks over. Revalidate the listing pages too,
+  // not just the preview page.
   try {
+    revalidatePath("/", "layout");
+    revalidatePath("/");
+    revalidatePath("/fixtures");
     revalidatePath(`/previews/${slug}`);
   } catch {
     // non-fatal
@@ -201,7 +208,12 @@ export async function DELETE(request: NextRequest) {
 
   await deleteAdminOverride(slug);
 
+  // Revalidate public listing pages too so a reverted match updates on the
+  // home page immediately (it is ISR-cached for 3 hours otherwise).
   try {
+    revalidatePath("/", "layout");
+    revalidatePath("/");
+    revalidatePath("/fixtures");
     revalidatePath(`/previews/${slug}`);
   } catch {
     // non-fatal
