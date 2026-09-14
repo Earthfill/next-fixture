@@ -18,6 +18,7 @@ import { cacheAside, writeCache, peekCache, invalidateCache } from "@/lib/cache"
 import { predictionReviewKey, standingsKey, upcomingFixturesKey, UPCOMING_DAYS, TTL } from "@/lib/cache/keys";
 import { getHiddenSlugs, isSlugHidden } from "@/lib/hidden-fixtures";
 import { getAdminOverride, getOverriddenSlugs } from "@/lib/admin-overrides";
+import { initPostgres, pgAvailable } from "@/lib/cache/postgres";
 import { evaluatePrediction } from "@/lib/prediction-review";
 import { normalizeSlug } from "@/lib/football/config";
 
@@ -66,6 +67,21 @@ export async function filterPublicVisible<T extends { slug?: string }>(items: T[
     getOverriddenSlugs(slugs),
   ]);
   const overriddenSet = new Set(overridden.map((s) => canonicalSlug(s)));
+
+  // The review gate below relies on admin overrides being readable from THIS
+  // process. If the durable store (PostgreSQL) is unavailable, overrides are
+  // only visible in the process that wrote them (memory fallback) — an admin
+  // edit made on another instance would be invisible here and the reviewed
+  // match would be silently hidden on the public site. In that degraded state
+  // fall back to the pre-review-gate behavior: show everything except manually
+  // hidden matches. When the store is healthy the review gate still applies.
+  await initPostgres().catch(() => undefined);
+  if (!pgAvailable()) {
+    return items.filter((item) => {
+      if (!item.slug) return true;
+      return !manualHidden.has(canonicalSlug(item.slug));
+    });
+  }
 
   // Resolve each fixture's review state in parallel (reads only cached data).
   const reviews = await Promise.all(slugs.map((s) => getPredictionReview(s).catch(() => null)));
