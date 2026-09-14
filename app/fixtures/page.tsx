@@ -6,7 +6,7 @@
 import { redirect } from "next/navigation";
 import { getAvailableMatchdays } from "@/lib/cache/pages";
 
-export const revalidate = 10800; // 3 hours
+export const revalidate = 300; // 5 minutes — admin edits/hides must reflect quickly
 
 export const metadata = {
   title: "Football Fixtures",

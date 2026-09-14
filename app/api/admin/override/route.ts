@@ -14,6 +14,8 @@ import {
   type AdminOverridePatch,
 } from "@/lib/admin-overrides";
 import { getPredictionReview, invalidatePredictionReview, writePredictionReview, getFixtureEffectivePrediction } from "@/lib/cache/pages";
+import { invalidateCache } from "@/lib/cache";
+import { upcomingFixturesKey, UPCOMING_DAYS } from "@/lib/cache/keys";
 import { normalizeSlug } from "@/lib/football/config";
 
 /** Canonical (ASCII-safe) fixture slug — matches generateSlug & cache keys. */
@@ -131,6 +133,31 @@ export async function POST(request: NextRequest) {
   // write is visible and show stale auto values.
   const { override, persisted } = await setAdminOverride(slug, patch, expiresAt, { sync: true });
 
+  // Reflect the edit on the public site immediately. Drop the cached upcoming
+  // snapshot so the homepage re-fetches the fresh list (which always contains
+  // this match and its current slug — a stale snapshot could still be filtering
+  // against an older slug/version of the match), and revalidate the ISR-cached
+  // pages so the next request re-renders from that data. This runs BEFORE the
+  // read-back check below so it also executes when verification hesitates
+  // (replica lag) — the write is durably committed on this side already.
+  await invalidateCache(upcomingFixturesKey(UPCOMING_DAYS)).catch(() => undefined);
+  [
+    "/",
+    "/fixtures",
+    `/previews/${slug}`,
+  ].forEach((p) => {
+    try {
+      revalidatePath(p);
+    } catch {
+      // non-fatal
+    }
+  });
+  try {
+    revalidatePath("/", "layout");
+  } catch {
+    // non-fatal
+  }
+
   if (persisted) {
     let verified = false;
     // Compare every prediction field against the read-back so a changed score,
@@ -172,19 +199,6 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // The home page, /fixtures and league/team listings are ISR-cached; without
-  // invalidating them an edited (previously hidden) match stays off the public
-  // site until the 3h revalidate ticks over. Revalidate the listing pages too,
-  // not just the preview page.
-  try {
-    revalidatePath("/", "layout");
-    revalidatePath("/");
-    revalidatePath("/fixtures");
-    revalidatePath(`/previews/${slug}`);
-  } catch {
-    // non-fatal
-  }
-
   // Recompute the prediction-quality review (tip ↔ scoreline ↔ win probability)
   // so the admin table's warning icon can update immediately after the edit.
   await invalidatePredictionReview(slug).catch(() => undefined);
@@ -209,7 +223,9 @@ export async function DELETE(request: NextRequest) {
   await deleteAdminOverride(slug);
 
   // Revalidate public listing pages too so a reverted match updates on the
-  // home page immediately (it is ISR-cached for 3 hours otherwise).
+  // home page immediately (it is ISR-cached otherwise), and drop the cached
+  // upcoming snapshot the homepage filters against so it refetches fresh data.
+  await invalidateCache(upcomingFixturesKey(UPCOMING_DAYS)).catch(() => undefined);
   try {
     revalidatePath("/", "layout");
     revalidatePath("/");

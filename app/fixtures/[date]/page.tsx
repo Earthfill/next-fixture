@@ -14,7 +14,7 @@ import FixtureDateNav from "@/components/football/FixtureDateNav";
 import { AD_SLOTS } from "@/lib/ads";
 import { ChevronRight, Calendar } from "lucide-react";
 
-export const revalidate = 10800; // 3 hours
+export const revalidate = 300; // 5 minutes — admin edits/hides must reflect quickly
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL as string;
 

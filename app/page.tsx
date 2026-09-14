@@ -10,7 +10,7 @@ import MatchdayList from "@/components/football/MatchdayList";
 import AdSlot from "@/components/common/AdSlot";
 import { AD_SLOTS } from "@/lib/ads";
 
-export const revalidate = 10800; // 3 hours
+export const revalidate = 300; // 5 minutes — admin edits/hides must reflect quickly; data itself is 24h-cached
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL as string;
 
