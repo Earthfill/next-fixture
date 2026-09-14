@@ -25,8 +25,43 @@ function loadEnvFile(path: string): void {
 
 loadEnvFile(".env.local");
 
+// Migrations apply DDL. Managed providers (Supabase) behave differently for
+// direct connections vs. the transaction pooler: the pooler multiplexes many
+// clients and can reject DDL (CREATE TABLE) → FATAL/XX000. The app runtime
+// intentionally uses the pooler (DATABASE_URL); migrations should use a DIRECT
+// connection when one is available. Set MIGRATE_DATABASE_URL to point
+// migrations at a direct connection while the app keeps using the pooler.
+const DB_URL_FOR_MIGRATE =
+  process.env.MIGRATE_DATABASE_URL || process.env.DATABASE_URL;
+
+const MAX_CONNECT_ATTEMPTS = 5;
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Probe the connection with a trivial query, retrying with backoff. Transient
+ * failures (cold start, DB pausing/resuming, build-sandbox races) shouldn't
+ * fail the deploy outright — but a genuinely unreachable DB still fails loudly
+ * because the schema is required at runtime. */
+async function connectWithRetry(pool: Pool): Promise<void> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= MAX_CONNECT_ATTEMPTS; attempt++) {
+    try {
+      await pool.query("SELECT 1");
+      return;
+    } catch (err) {
+      lastErr = err;
+      console.warn(
+        `[migrate] DB connect attempt ${attempt}/${MAX_CONNECT_ATTEMPTS} failed: ${(err as Error)?.message ?? String(err)}`
+      );
+      if (attempt < MAX_CONNECT_ATTEMPTS) await sleep(750 * attempt);
+    }
+  }
+  throw lastErr;
+}
+
 async function main(): Promise<void> {
-  const url = process.env.DATABASE_URL;
+  const url = DB_URL_FOR_MIGRATE;
   if (!url) {
     console.warn("[migrate] DATABASE_URL is not set - nothing to migrate (skipping).");
     return;
@@ -39,10 +74,14 @@ async function main(): Promise<void> {
 
   const pool = new Pool({
     connectionString: url,
+    connectionTimeoutMillis: 8000,
+    statement_timeout: 30_000,
     ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
   });
 
   try {
+    // Resolve transient connectivity issues before touching DDL.
+    await connectWithRetry(pool);
     await pool.query(
       `CREATE TABLE IF NOT EXISTS "_migrations" (
          name       TEXT PRIMARY KEY,
@@ -101,6 +140,15 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error("[migrate] fatal:", err);
+  console.error("");
+  console.error("[migrate] FATAL: could not run database migrations.");
+  console.error("  " + ((err as Error)?.message ?? String(err)));
+  console.error("");
+  console.error("Likely causes & fixes:");
+  console.error("  1. Supabase free-tier DB is PAUSED -> open it in the Supabase dashboard (or query it once).");
+  console.error("  2. DDL through the transaction pooler fails -> set MIGRATE_DATABASE_URL to the DIRECT");
+  console.error("     connection (host:5432, not the pooler host:port). The app runtime keeps using the pooler.");
+  console.error("  3. Password in DATABASE_URL/MIGRATE_DATABASE_URL contains special chars that are not URL-encoded.");
+  console.error("  4. The build sandbox cannot reach the DB host/port (firewall, paused project, IP restrictions).");
   process.exit(1);
 });
