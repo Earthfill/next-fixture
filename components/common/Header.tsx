@@ -51,7 +51,9 @@ export default function Header() {
             </button>
           </nav>
 
-          <AccountMenu />
+          <div className="hidden md:block">
+            <AccountMenu />
+          </div>
 
           {/* ─── Mobile Burger Button ─────────────────────────────── */}
           <button
