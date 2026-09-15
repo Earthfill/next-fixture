@@ -56,20 +56,20 @@ export default function AccountMenu() {
       {!checked ? (
         <span className="text-xs text-white/60">…</span>
       ) : !me ? (
-        <div className="flex items-center gap-1">
+        <div className="flex flex-col md:flex-row items-center gap-2 lg:gap-3 [&_span]:w-full [&_span]:text-center">
           <Link
             href={`/login?next=${encodeURIComponent(pathname)}`}
-            className="flex items-center gap-1 rounded px-3 py-1.5 text-sm font-medium text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+            className="flex items-center gap-1 w-full md:w-fit rounded px-3 py-1.5 text-sm font-medium text-black hover:bg-yellow-400/70 bg-yellow-400 transition-colors"
           >
-            <LogIn className="h-4 w-4" />
-            <span className="hidden lg:inline">Sign in</span>
+            <LogIn className="hidden md:inline h-4 w-4" />
+            <span className="inline md:hidden lg:inline">Sign in</span>
           </Link>
           <Link
             href={`/register?next=${encodeURIComponent(pathname)}`}
-            className="flex items-center gap-1 rounded bg-white/15 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/25 transition-colors"
+            className="flex items-center gap-1 w-full md:w-fit rounded bg-white/15 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/25 transition-colors"
           >
-            <UserPlus className="h-4 w-4" />
-            <span className="hidden lg:inline">Register</span>
+            <UserPlus className="hidden md:inline h-4 w-4" />
+            <span className="inline md:hidden lg:inline">Register</span>
           </Link>
         </div>
       ) : (
@@ -82,7 +82,7 @@ export default function AccountMenu() {
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 text-[11px] font-bold text-white">
               {me.displayName.charAt(0).toUpperCase()}
             </span>
-            <span className="hidden lg:inline max-w-[10rem] truncate">{me.displayName}</span>
+            <span className="hidden lg:inline max-w-40 truncate">{me.displayName}</span>
           </button>
           {open && (
             <button
