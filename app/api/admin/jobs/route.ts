@@ -8,6 +8,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { fetchNext7DaysFixtures } from "@/lib/jobs/midnight-fixtures";
 import { clearAllCaches } from "@/lib/cache";
+import { runStaleDataCleanup } from "@/lib/cleanup";
 import { getQuota, clearApiCache } from "@/lib/football/api";
 import { resetCoveredLeagues } from "@/lib/football/service";
 import { resetCircuitBreaker } from "@/lib/football/circuit-breaker";
@@ -50,6 +51,10 @@ export async function POST(request: NextRequest) {
         // 2. Cache-aside tiers (memory, Redis, PostgreSQL api_cache).
         const cacheResult = await clearAllCaches();
 
+        // 2b. Prune durable rows whose lifetime has ended (expired-match chat,
+        // stale sessions, used/expired email tokens).
+        const cleanup = await runStaleDataCleanup().catch(() => null);
+
         // 3. Next.js Full Route Cache (ISR) + Data Cache tags.
         let fullRouteCacheRevalidated = true;
         try {
@@ -61,7 +66,7 @@ export async function POST(request: NextRequest) {
           console.warn("[admin:jobs] revalidation failed:", err);
         }
 
-        result = { ...cacheResult, fullRouteCacheRevalidated };
+        result = { ...cacheResult, cleanup, fullRouteCacheRevalidated };
         break;
       }
       default: {

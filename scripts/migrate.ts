@@ -74,6 +74,10 @@ async function main(): Promise<void> {
 
   const pool = new Pool({
     connectionString: url,
+    // A migration only needs one connection; keeping the pool tiny avoids
+    // bumping against Supabase free-tier pooler client caps (max 15) while the
+    // running app holds its own connections.
+    max: 2,
     connectionTimeoutMillis: 8000,
     statement_timeout: 30_000,
     ssl: needsSsl ? { rejectUnauthorized: false } : undefined,

@@ -16,7 +16,9 @@ import { fixturesKey, upcomingFixturesKey, UPCOMING_DAYS, TTL } from "@/lib/cach
 import { COMPETITION_SLUGS } from "@/lib/football/config";
 import { getQuota, hasApi } from "@/lib/football/api";
 import { siteToday, toSiteDate } from "@/lib/dates";
+import { runStaleDataCleanup } from "@/lib/cleanup";
 import type { Fixture } from "@/lib/types";
+import type { CleanupResult } from "@/lib/cleanup";
 
 export interface MidnightFixturesResult {
   daysFetched: number;
@@ -25,6 +27,7 @@ export interface MidnightFixturesResult {
   durationMs: number;
   hasApi: boolean;
   quotaRemaining: number | null;
+  cleanup: CleanupResult | null;
 }
 
 export async function fetchNext7DaysFixtures(): Promise<MidnightFixturesResult> {
@@ -35,6 +38,14 @@ export async function fetchNext7DaysFixtures(): Promise<MidnightFixturesResult> 
   // fresh on the next page visit. Fixtures are re-prefetched right after, so
   // the homepage stays warm.
   await clearAllCaches();
+
+  // Drop durable rows whose lifetime has ended — chat for finished matches,
+  // expired sessions and used/expired email tokens — at the same moment the
+  // cache (and thus the finished preview) is removed.
+  const cleanup = await runStaleDataCleanup().catch(() => null);
+  if (cleanup?.ran) {
+    console.log("[cron:midnight] cleanup removed:", cleanup.stats);
+  }
 
   // Resolve "today" in the SITE timezone (not the server's UTC clock) so the
   // prefetched window lines up with the dates the homepage and API display.
@@ -58,6 +69,7 @@ export async function fetchNext7DaysFixtures(): Promise<MidnightFixturesResult> 
       durationMs: Date.now() - startedAt,
       hasApi: hasApi(),
       quotaRemaining: quota?.remaining ?? null,
+      cleanup,
     };
   }
 
@@ -113,5 +125,6 @@ export async function fetchNext7DaysFixtures(): Promise<MidnightFixturesResult> 
     durationMs: Date.now() - startedAt,
     hasApi: hasApi(),
     quotaRemaining: getQuota()?.remaining ?? null,
+    cleanup,
   };
 }

@@ -222,6 +222,27 @@ export interface FixtureEvent {
   detail: string; // "Red Card" | "Yellow Card" etc.
 }
 
+// ─── Preview Chat Types (logged-in match discussion) ─────────────────────
+
+export type ChatModerationStatus = "approved" | "pending" | "removed";
+
+export interface ChatMessageUser {
+  id: string;
+  displayName: string;
+  email: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  slug: string;
+  user: ChatMessageUser;
+  body: string;
+  parentId: string | null;
+  moderationStatus: ChatModerationStatus;
+  removedBy: string | null;
+  createdAt: string;
+}
+
 // ─── Video Highlights Types ──────────────────────────────────────────────
 
 export interface HighlightVideo {

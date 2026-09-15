@@ -13,6 +13,7 @@ import { PROVIDER_IDS, PROVIDER_META, getActiveProviderId, providerHasKey } from
 import JobRunner from "@/components/admin/JobRunner";
 import FixtureList from "@/components/admin/FixtureList";
 import ProviderControl from "@/components/admin/ProviderControl";
+import ChatModeration from "@/components/admin/ChatModeration";
 import {
   Trophy, Calendar, BarChart3, RefreshCw, ExternalLink,
   DollarSign, Eye, Pencil, PenLine, CalendarDays, Sparkles, Server, TriangleAlert,
@@ -287,6 +288,9 @@ export default async function AdminPage() {
           </li>
         </ul>
       </div>
+
+      {/* Chat Moderation */}
+      <ChatModeration token={adminToken as string} />
     </div>
   );
 }

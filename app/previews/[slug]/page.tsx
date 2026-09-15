@@ -21,6 +21,7 @@ import PredictionCard from "@/components/football/PredictionCard";
 import WinProbability from "@/components/football/WinProbability";
 import TeamNews from "@/components/football/TeamNews";
 import UpcomingFixtures from "@/components/football/UpcomingFixtures";
+import PreviewChat from "@/components/football/PreviewChat";
 
 export const dynamic = "force-dynamic"; // admin overrides must render live — no ISR HTML cache
 export const maxDuration = 60; // Vercel: allow up to 60s for the cold-cache API fetch
@@ -292,6 +293,9 @@ export default async function MatchPreviewPage({ params }: { params: Promise<{ s
         <div className="mt-8 flex justify-center">
           {/* <AdSlot slotId="preview-leaderboard-2" format="leaderboard" /> */}
         </div>
+
+        {/* 12. Match discussion (logged-in chat) */}
+        <PreviewChat slug={slug} />
       </article>
     </>
   );

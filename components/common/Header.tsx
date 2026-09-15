@@ -9,6 +9,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { X, Trophy, ChevronRight, Newspaper, CalendarDays, Menu } from "lucide-react";
 import { LEAGUE_BY_COUNTRY, COUNTRY_ORDER } from "@/lib/football/config";
+import AccountMenu from "@/components/common/AccountMenu";
 import { usePathname } from "next/navigation";
 
 export default function Header() {
@@ -49,6 +50,8 @@ export default function Header() {
               Competitions
             </button>
           </nav>
+
+          <AccountMenu />
 
           {/* ─── Mobile Burger Button ─────────────────────────────── */}
           <button
@@ -97,6 +100,9 @@ export default function Header() {
               <Trophy className="h-4 w-4" />
               Competitions
             </button>
+            <div className="border-t border-white/10 pt-2 mt-1 px-1">
+              <AccountMenu />
+            </div>
           </nav>
         </div>
       )}
