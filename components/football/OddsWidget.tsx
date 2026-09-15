@@ -19,7 +19,7 @@ export default async function OddsWidget({ fixtureId, homeTeam, awayTeam }: Odds
       <h2 className="sm-section-heading">Match Odds</h2>
       <OddsTabbedView rows={rows} />
       <p className="text-[10px] text-zinc-400 mt-2 text-center">
-        18+ | Odds subject to change | Please gamble responsibly | #ad
+        18+ | Odds valid at time of posting | Please gamble responsibly
       </p>
       {/* {rows.some((r) => r.affiliateUrl.includes("YOUR_")) && (
         <p className="text-[9px] text-amber-600 mt-1 text-center">
