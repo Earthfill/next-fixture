@@ -22,7 +22,7 @@ const leagueNames: Record<string, string> = {
   "dfb-pokal": "DFB-Pokal", "coppa-italia": "Coppa Italia", "coupe-de-france": "Coupe de France",
 };
 
-export const revalidate = 43200; // 12 hours
+export const revalidate = 86400; // 24 hours
 
 export async function generateMetadata({ params }: { params: Promise<{ "league-slug": string }> }): Promise<Metadata> {
   const s = (await params)["league-slug"];

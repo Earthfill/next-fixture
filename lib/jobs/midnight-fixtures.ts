@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 
 import { fetchFixturesForRange } from "@/lib/football/service";
-import { clearAllCaches, writeCache } from "@/lib/cache";
+import { writeCache } from "@/lib/cache";
 import { fixturesKey, upcomingFixturesKey, UPCOMING_DAYS, TTL } from "@/lib/cache/keys";
 import { COMPETITION_SLUGS } from "@/lib/football/config";
 import { getQuota, hasApi } from "@/lib/football/api";
@@ -33,11 +33,11 @@ export interface MidnightFixturesResult {
 export async function fetchNext7DaysFixtures(): Promise<MidnightFixturesResult> {
   const startedAt = Date.now();
 
-  // Invalidate all cache tiers first (mirrors the admin "Clear Cache" action)
-  // so standings, past results, top scorers/assists, previews, etc. are fetched
-  // fresh on the next page visit. Fixtures are re-prefetched right after, so
-  // the homepage stays warm.
-  await clearAllCaches();
+  // NOTE: we deliberately do NOT clear all caches here. Wiping Redis/Postgres
+  // every night would force a full-site rebuild (previews, lineups, standings)
+  // through the quota-limited API each morning — the root cause of the daily
+  // quota running out. Fixtures below are re-prefetched fresh; everything else
+  // expires via its own TTL. Use the admin "Clear Cache" action for a full purge.
 
   // Drop durable rows whose lifetime has ended — chat for finished matches,
   // expired sessions and used/expired email tokens — at the same moment the

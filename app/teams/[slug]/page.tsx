@@ -35,7 +35,7 @@ import LineupDisplay from "@/components/football/LineupDisplay";
 import HeadToHeadTable from "@/components/football/HeadToHeadTable";
 import NewsSection from "@/components/football/NewsSection";
 
-export const revalidate = 21600; // 6 hours
+export const revalidate = 86400; // 24 hours — matches the 24h data cache underneath
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL as string;
 

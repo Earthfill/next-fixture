@@ -23,7 +23,7 @@ import TeamNews from "@/components/football/TeamNews";
 import UpcomingFixtures from "@/components/football/UpcomingFixtures";
 import PreviewChat from "@/components/football/PreviewChat";
 
-export const dynamic = "force-dynamic"; // admin overrides must render live — no ISR HTML cache
+export const revalidate = 86400; // 24h ISR — admin edits/hides revalidate this path on demand (/api/admin/override, /api/admin/hidden)
 export const maxDuration = 60; // Vercel: allow up to 60s for the cold-cache API fetch
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL as string;

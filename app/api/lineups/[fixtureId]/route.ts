@@ -8,8 +8,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPredictedLineup } from "@/lib/lineup-service";
 import { apiFetch } from "@/lib/football/api";
 
-// Revalidate every 5 minutes as kickoff approaches
-export const revalidate = 300;
+// Predicted-lineup data is itself 24h-cached, so cache the response a full day.
+export const revalidate = 86400;
 
 // ─── GET handler ──────────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ export async function GET(
 
     return NextResponse.json(response, {
       headers: {
-        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+        "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=600",
       },
     });
   } catch (err) {

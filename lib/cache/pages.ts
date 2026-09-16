@@ -201,7 +201,7 @@ export async function getPastResults(leagueSlug: string, limit?: number): Promis
 }
 
 /**
- * Full match preview payload (~8-10 upstream calls; 10m TTL). Hidden matches
+ * Full match preview payload (~8-10 upstream calls; 24h TTL). Hidden matches
  * resolve to null so their preview page 404s on the public site.
  */
 export async function getMatchPreviewBySlug(slug: string): Promise<MatchPreview | null> {
