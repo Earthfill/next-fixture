@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { MessageSquare, Send, Lock, Reply, X, Trash2, Loader2, Mail } from "lucide-react";
+import { MessageSquare, Send, Lock, Reply, X, Trash2, Loader2, Mail, ThumbsUp, ThumbsDown } from "lucide-react";
 import { usePathname } from "next/navigation";
 import {
   getAuthSnapshot,
@@ -37,9 +37,14 @@ interface ChatMessage {
   moderationStatus: ChatStatus;
   removedBy: string | null;
   createdAt: string;
+  likes: number;
+  dislikes: number;
+  myReaction: "like" | "dislike" | null;
 }
 
 const POLL_MS = 8000;
+/** Self-removal window — the server blocks deletes past this age too. */
+const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
 // Anchor the "Chat" links in MatchdayList point at (/previews/<slug>#discussion).
 const DISCUSSION_ID = "discussion";
@@ -88,6 +93,9 @@ export default function PreviewChat({ slug }: { slug: string }) {
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
+  // Ticked by an effect (never Date.now() during render — react-hooks/purity).
+  // Drives the 5-minute self-removal countdown's button visibility.
+  const [now, setNow] = useState(0);
 
   const pathname = usePathname();
 
@@ -125,6 +133,14 @@ export default function PreviewChat({ slug }: { slug: string }) {
       window.removeEventListener("focus", onFocus);
     };
   }, [loadMessages]);
+
+  // Keep the deletion-window clock fresh (30s tick; purity-safe).
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    tick();
+    const interval = setInterval(tick, 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Land the visitor on the discussion when they arrive via a "Chat" link
   // (/previews/<slug>#discussion) — including when the hash was resolved before
@@ -215,10 +231,65 @@ export default function PreviewChat({ slug }: { slug: string }) {
           prev.map((m) => (m.id === msg.id ? { ...m, moderationStatus: "removed" } : m))
         );
       } else {
-        setError("Could not remove the message.");
+        const data = await res.json().catch(() => ({}));
+        setError(data?.error ?? "Could not remove the message.");
       }
     } catch {
       setError("Could not remove the message.");
+    }
+  }
+
+  /** Toggle like/dislike on a message; same reaction clears it. */
+  async function handleReact(msg: ChatMessage, reaction: "like" | "dislike") {
+    if (!me) {
+      setError("Sign in to react to messages.");
+      return;
+    }
+    if (!me.verified) {
+      setError("Please verify your email before joining the discussion.");
+      return;
+    }
+    const target = msg.myReaction === reaction ? null : reaction;
+
+    // Optimistic update; the response below reconciles with server truth.
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== msg.id) return m;
+        const likes = m.likes + (target === "like" ? 1 : m.myReaction === "like" ? -1 : 0);
+        const dislikes = m.dislikes + (target === "dislike" ? 1 : m.myReaction === "dislike" ? -1 : 0);
+        return { ...m, myReaction: target, likes: Math.max(0, likes), dislikes: Math.max(0, dislikes) };
+      })
+    );
+
+    try {
+      const res = await fetch(
+        `/api/previews/${encodeURIComponent(slug)}/chat/${msg.id}/reaction`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reaction: target }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data?.error ?? "Could not update the reaction.");
+        if (res.status === 401) notifyAuthChanged(null);
+        return;
+      }
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msg.id
+            ? {
+                ...m,
+                likes: data.likes ?? m.likes,
+                dislikes: data.dislikes ?? m.dislikes,
+                myReaction: data.myReaction ?? m.myReaction,
+              }
+            : m
+        )
+      );
+    } catch {
+      setError("Network error — please try again.");
     }
   }
 
@@ -237,6 +308,11 @@ export default function PreviewChat({ slug }: { slug: string }) {
   function renderMessage(msg: ChatMessage, isReply: boolean) {
     const isMine = me?.id === msg.user.id;
     const removed = msg.moderationStatus === "removed";
+    // 5-minute self-removal window (server enforces the same boundary). `now`
+    // comes from the ticking effect — 0 until it first fires, so the button
+    // never appears before the clock exists.
+    const ageMs = now > 0 ? now - new Date(msg.createdAt).getTime() : Infinity;
+    const canDelete = isMine && !removed && !Number.isNaN(ageMs) && ageMs <= FIVE_MINUTES_MS;
     return (
       <div
         key={msg.id}
@@ -265,6 +341,36 @@ export default function PreviewChat({ slug }: { slug: string }) {
                   <p className="mt-0.5 text-sm leading-relaxed break-words whitespace-pre-wrap text-zinc-800">
                     {msg.body}
                   </p>
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleReact(msg, "like")}
+                      aria-pressed={msg.myReaction === "like"}
+                      aria-label="Like this message"
+                      title={me ? (msg.myReaction === "like" ? "Remove your like" : "Like") : "Sign in to react"}
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer ${
+                        msg.myReaction === "like"
+                          ? "bg-[#002b5c]/10 text-[#002b5c]"
+                          : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                      }`}
+                    >
+                      <ThumbsUp className="h-3.5 w-3.5" /> {msg.likes}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleReact(msg, "dislike")}
+                      aria-pressed={msg.myReaction === "dislike"}
+                      aria-label="Dislike this message"
+                      title={me ? (msg.myReaction === "dislike" ? "Remove your dislike" : "Dislike") : "Sign in to react"}
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer ${
+                        msg.myReaction === "dislike"
+                          ? "bg-red-500/10 text-red-600"
+                          : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                      }`}
+                    >
+                      <ThumbsDown className="h-3.5 w-3.5" /> {msg.dislikes}
+                    </button>
+                  </div>
                 </>
               )}
             </div>
@@ -274,15 +380,17 @@ export default function PreviewChat({ slug }: { slug: string }) {
                   type="button"
                   onClick={() => setReplyingTo(msg)}
                   aria-label="Reply"
+                  title="Reply"
                   className="rounded p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-[#002b5c] cursor-pointer"
                 >
                   <Reply className="h-3.5 w-3.5" />
                 </button>
-                {isMine && (
+                {canDelete && (
                   <button
                     type="button"
                     onClick={() => handleRemove(msg)}
                     aria-label="Remove message"
+                    title="Remove message (within 5 minutes of posting)"
                     className="rounded p-1 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 cursor-pointer"
                   >
                     <Trash2 className="h-3.5 w-3.5" />

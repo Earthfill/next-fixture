@@ -41,6 +41,19 @@ export async function DELETE(
     return NextResponse.json({ error: "You can only remove your own messages." }, { status: 403 });
   }
 
+  // Industry-standard self-removal window: 5 minutes from posting. Admins are
+  // exempt — they moderate through the admin panel at any age.
+  const FIVE_MINUTES_MS = 5 * 60 * 1000;
+  if (!isAdmin) {
+    const ageMs = Date.now() - new Date(message.createdAt).getTime();
+    if (Number.isNaN(ageMs) || ageMs > FIVE_MINUTES_MS) {
+      return NextResponse.json(
+        { error: "Messages can only be removed within 5 minutes of posting." },
+        { status: 403 }
+      );
+    }
+  }
+
   await removeMessage(id, isAdmin ? "admin" : user?.id ?? "unknown").catch(() => undefined);
   return NextResponse.json({ success: true });
 }

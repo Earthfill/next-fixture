@@ -226,6 +226,8 @@ export interface FixtureEvent {
 
 export type ChatModerationStatus = "approved" | "pending" | "removed";
 
+export type ChatReaction = "like" | "dislike";
+
 export interface ChatMessageUser {
   id: string;
   displayName: string;
@@ -241,6 +243,10 @@ export interface ChatMessage {
   moderationStatus: ChatModerationStatus;
   removedBy: string | null;
   createdAt: string;
+  /** Like/dislike tallies + the current viewer's own reaction (null when logged out). */
+  likes: number;
+  dislikes: number;
+  myReaction: ChatReaction | null;
 }
 
 // ─── Video Highlights Types ──────────────────────────────────────────────

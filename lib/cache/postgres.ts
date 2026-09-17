@@ -8,7 +8,7 @@
 // If DATABASE_URL is missing/unreachable the layer silently disables itself.
 
 import { Pool } from "pg";
-import type { ChatModerationStatus } from "@/lib/types";
+import type { ChatModerationStatus, ChatReaction } from "@/lib/types";
 
 let pool: Pool | null = null;
 let available = false;
@@ -454,6 +454,7 @@ export async function pgSettingSet(key: string, value: string): Promise<boolean>
 const USERS_TABLE = "app_users";
 const SESSIONS_TABLE = "app_sessions";
 const CHAT_TABLE = "preview_chat_messages";
+const REACTIONS_TABLE = "preview_chat_reactions";
 const EMAIL_TOKENS_TABLE = "email_tokens";
 
 export interface AppUserRow {
@@ -828,6 +829,102 @@ export async function pgChatExists(id: string): Promise<boolean> {
     return (res.rowCount ?? 0) > 0;
   } catch {
     return false;
+  }
+}
+
+// ───────────── Like / dislike reactions ─────────────────────────────────────
+
+export interface ChatReactionCounts {
+  likes: number;
+  dislikes: number;
+  myReaction: ChatReaction | null;
+}
+
+/** Aggregated like/dislike tallies + a viewer's own reaction for a batch of message ids. */
+export async function pgChatReactionCounts(
+  messageIds: string[],
+  viewerId: string | null
+): Promise<Map<string, ChatReactionCounts>> {
+  const counts = new Map<string, ChatReactionCounts>();
+  if (!messageIds.length) return counts;
+  await initPostgres();
+  if (!pool || !available) return counts;
+
+  const ids = Array.from(new Set(messageIds));
+  try {
+    const agg = await pool.query(
+      `SELECT message_id, reaction, count(*)::int AS n
+       FROM "${REACTIONS_TABLE}"
+       WHERE message_id = ANY($1::text[])
+       GROUP BY message_id, reaction`,
+      [ids]
+    );
+    for (const id of ids) counts.set(id, { likes: 0, dislikes: 0, myReaction: null });
+    for (const r of agg.rows) {
+      const entry = counts.get(r.message_id);
+      if (!entry) continue;
+      if (r.reaction === "like") entry.likes = r.n;
+      else if (r.reaction === "dislike") entry.dislikes = r.n;
+    }
+
+    if (viewerId) {
+      const mine = await pool.query(
+        `SELECT message_id, reaction FROM "${REACTIONS_TABLE}"
+         WHERE user_id = $1 AND message_id = ANY($2::text[])`,
+        [viewerId, ids]
+      );
+      for (const r of mine.rows) {
+        const entry = counts.get(r.message_id);
+        if (entry) entry.myReaction = r.reaction as ChatReaction;
+      }
+    }
+    return counts;
+  } catch (err) {
+    noteFailure("[chat:pg] reaction counts failed:", err);
+    return counts;
+  }
+}
+
+/**
+ * Set (or clear) the viewer's reaction on a message — `reaction: null` removes
+ * it. Returns the message's fresh tallies plus the viewer's (now current)
+ * reaction, or null when the store is unavailable.
+ */
+export async function pgChatReactionSet(
+  messageId: string,
+  userId: string,
+  reaction: ChatReaction | null
+): Promise<ChatReactionCounts | null> {
+  await initPostgres();
+  if (!pool || !available) return null;
+  try {
+    if (reaction === null) {
+      await pool.query(
+        `DELETE FROM "${REACTIONS_TABLE}" WHERE message_id = $1 AND user_id = $2`,
+        [messageId, userId]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO "${REACTIONS_TABLE}" (message_id, user_id, reaction, created_at)
+         VALUES ($1, $2, $3, now())
+         ON CONFLICT (message_id, user_id) DO UPDATE SET reaction = EXCLUDED.reaction`,
+        [messageId, userId, reaction]
+      );
+    }
+    const agg = await pool.query(
+      `SELECT reaction, count(*)::int AS n FROM "${REACTIONS_TABLE}"
+       WHERE message_id = $1 GROUP BY reaction`,
+      [messageId]
+    );
+    const counts: ChatReactionCounts = { likes: 0, dislikes: 0, myReaction: reaction };
+    for (const r of agg.rows) {
+      if (r.reaction === "like") counts.likes = r.n;
+      else if (r.reaction === "dislike") counts.dislikes = r.n;
+    }
+    return counts;
+  } catch (err) {
+    noteFailure("[chat:pg] reaction set failed:", err);
+    return null;
   }
 }
 

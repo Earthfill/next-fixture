@@ -9,7 +9,7 @@ import { getSessionUser } from "@/lib/auth";
 import { normalizeSlug } from "@/lib/football/config";
 import { getMatchPreviewBySlug } from "@/lib/cache/pages";
 import {
-  listApprovedMessages,
+  listPublicMessages,
   createMessage,
   MAX_BODY_LENGTH,
 } from "@/lib/preview-chat";
@@ -47,7 +47,10 @@ export async function GET(
   const slug = normalizeSlug(rawSlug);
   if (!isPreviewSlug(slug)) return NextResponse.json({ messages: [] });
 
-  const messages = await listApprovedMessages(slug).catch(() => []);
+  // Anonymous visitors still get counts; a signed-in viewer also learns their
+  // own reaction (the UI highlights it).
+  const viewer = await getSessionUser().catch(() => null);
+  const messages = await listPublicMessages(slug, viewer?.id ?? null).catch(() => []);
   return NextResponse.json({ messages });
 }
 

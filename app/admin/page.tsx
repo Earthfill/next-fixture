@@ -15,10 +15,11 @@ import JobRunner from "@/components/admin/JobRunner";
 import FixtureList from "@/components/admin/FixtureList";
 import ProviderControl from "@/components/admin/ProviderControl";
 import ChatModeration from "@/components/admin/ChatModeration";
-import RegisteredUsersCard from "@/components/admin/RegisteredUsersCard";
+import RegisteredUsersTable from "@/components/admin/RegisteredUsersTable";
 import {
   Trophy, Calendar, BarChart3, RefreshCw, ExternalLink,
   DollarSign, Eye, Pencil, PenLine, CalendarDays, Sparkles, Server, TriangleAlert,
+  Users, CheckCircle2,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -143,8 +144,36 @@ export default async function AdminPage() {
           <p className="text-2xl font-bold leading-none text-zinc-900">{totalEdited}</p>
           <p className="mt-1.5 text-xs font-medium text-zinc-500">Edited Previews</p>
         </div>
-        {/* Registered users — click to open the account drawer */}
-        <RegisteredUsersCard token={adminToken as string} stats={userStats} />
+        {/* Registered users — read-only stat; the full table sits below the grid */}
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
+              <Users className="h-5 w-5" />
+            </div>
+            {userStats !== null && userStats.verified > 0 && (
+              <span
+                title={`${userStats.verified} of ${userStats.total} accounts have a verified email`}
+                className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
+              >
+                <CheckCircle2 className="h-3 w-3" /> {userStats.verified}
+              </span>
+            )}
+          </div>
+          <p className="text-2xl font-bold leading-none text-zinc-900">
+            {userStats === null ? "—" : userStats.total}
+          </p>
+          <p className="mt-1.5 text-xs font-medium text-zinc-500">Registered Users</p>
+          {userStats !== null && userStats.pending > 0 && (
+            <p className="mt-1 text-[11px] font-medium text-amber-600">
+              {userStats.pending} awaiting email verification
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Registered Users — full table view (no drawer) */}
+      <div className="mb-8">
+        <RegisteredUsersTable token={adminToken as string} stats={userStats} />
       </div>
 
       {/* Data Provider */}

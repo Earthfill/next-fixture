@@ -35,7 +35,9 @@ export default function MatchHeader({ match }: MatchHeaderProps) {
     <div>
       {/* Competition breadcrumb */}
       <div className="flex items-center gap-2 text-xs text-zinc-500 mb-3">
-        <span>Home</span>
+        <Link href="/" className="hover:text-[#002b5c] hover:underline">
+          Home
+        </Link>
         <span>›</span>
         <span>{competition}</span>
         <span>›</span>
