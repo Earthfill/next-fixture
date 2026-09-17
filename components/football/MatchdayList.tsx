@@ -172,7 +172,6 @@ export default function MatchdayList({ matchdays }: Props) {
                               className="flex shrink-0 items-center gap-1.5 border-l border-zinc-100 px-3 text-[11px] font-medium text-zinc-400 transition-colors hover:text-[#002b5c]"
                             >
                               <MessageSquare className="h-3.5 w-3.5" />
-                              <span className="hidden md:inline">Chat</span>
                             </Link>
                           )}
                         </div>
