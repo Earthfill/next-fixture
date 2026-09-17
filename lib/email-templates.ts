@@ -66,7 +66,13 @@ function shell(title: string, siteUrl: string, bodyHtml: string): string {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:${NAVY};border:1px solid rgba(255,255,255,0.14);border-radius:12px;">
             <tr>
               <td style="padding:30px;">
-                <img src="${siteUrl}/logo.png" alt="Next Fixture" width="140" height="43" border="0" style="display:block;border:0;outline:none;text-decoration:none;width:140px;height:43px;" />
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td align="center" style="text-align:center;">
+                      <img src="${siteUrl}/logo.png" alt="Next Fixture" width="140" height="43" border="0" style="display:block;margin:0 auto;border:0;outline:none;text-decoration:none;width:140px;height:43px;" />
+                    </td>
+                  </tr>
+                </table>
                 ${bodyHtml}
               </td>
             </tr>
