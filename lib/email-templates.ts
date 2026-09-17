@@ -2,11 +2,11 @@
 // Email templates — simple inline-HTML transactional emails (verification link
 // + welcome). Minimal styling, works in every inbox client.
 // ---------------------------------------------------------------------------
-// NOTE: the brand mark uses /logo.png (raster), not /logo.svg — Gmail and
-// Outlook strip SVG images from mail, and logo.svg is white-on-transparent so
-// it would also be invisible on the white card. logo.png is the navy-tile
-// version of the same artwork (and the logo already declared to search engines
-// in app/page.tsx), so it reads correctly on white and in dark mode.
+// Brand: the card is the logo's navy (#002B5C) with white text, and the accent
+// is the logo's yellow (#FFD230) — used for the one call-to-action. The raster
+// brand mark stays /logo.png (Gmail and Outlook strip SVG images from mail, and
+// logo.svg is white-on-transparent, which wouldn't read on white). Because the
+// card and the logo tile share the same navy, the mark sits flush on the card.
 //
 // URLs: every absolute link/image inside an email goes to the PUBLIC site, NOT
 // to the process's request origin. Emails leave the dev machine and land in
@@ -16,6 +16,13 @@
 // production domain.
 
 const PRODUCTION_BASE_URL = "https://next-fixture.com";
+
+// Brand palette (sampled directly from public/logo.png).
+const NAVY = "#002b5c"; // logo tile / card background
+const NAVY_DEEP = "#001a3a"; // page background behind the card
+const YELLOW = "#ffd230"; // logo "Fixture" accent — the CTA color
+const TEXT_MAIN = "#ffffff"; // headings + body copy
+const TEXT_MUTED = "#b9c5d6"; // secondary copy, legible on navy
 
 function normalizeBase(url: string): string {
   return url.trim().replace(/\/+$/, "");
@@ -52,18 +59,21 @@ function shell(title: string, siteUrl: string, bodyHtml: string): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${title}</title>
   </head>
-  <body style="margin:0;padding:0;background:#fafafa;font-family:Inter,Arial,Helvetica,sans-serif;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;">
+  <body style="margin:0;padding:0;background:${NAVY_DEEP};font-family:Inter,Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${NAVY_DEEP};">
       <tr>
         <td align="center" style="padding:32px 16px;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e5e5e5;border-radius:10px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:${NAVY};border:1px solid rgba(255,255,255,0.14);border-radius:12px;">
             <tr>
-              <td style="padding:28px;">
+              <td style="padding:30px;">
                 <img src="${siteUrl}/logo.png" alt="Next Fixture" width="140" height="43" border="0" style="display:block;border:0;outline:none;text-decoration:none;width:140px;height:43px;" />
                 ${bodyHtml}
               </td>
             </tr>
           </table>
+          <p style="margin:16px 0 0;font-size:11px;line-height:1.5;color:rgba(255,255,255,0.45);">
+            Next Fixture · Football predictions, previews &amp; betting tips
+          </p>
         </td>
       </tr>
     </table>
@@ -83,17 +93,17 @@ export function verificationEmailHtml({
   return shell(
     "Verify your email",
     siteUrl,
-    `<p style="margin:20px 0 12px;font-size:15px;line-height:1.5;color:#18181b;">
+    `<p style="margin:22px 0 12px;font-size:15px;line-height:1.6;color:${TEXT_MAIN};">
        Hi ${displayName} — thanks for joining. To verify your email and join the match discussions, click the button below.
      </p>
-     <p style="margin:24px 0;">
-       <a href="${link}" style="display:inline-block;background:#002b5c;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-size:14px;font-weight:600;">Verify my email</a>
+     <p style="margin:26px 0;">
+       <a href="${link}" style="display:inline-block;background:${YELLOW};color:${NAVY_DEEP};text-decoration:none;padding:13px 24px;border-radius:8px;font-size:14px;font-weight:700;">Verify my email</a>
      </p>
-     <p style="margin:0;font-size:13px;line-height:1.5;color:#a1a1aa;">
+     <p style="margin:0;font-size:13px;line-height:1.5;color:${TEXT_MUTED};">
        Or copy and paste this link into your browser:<br />
-       <span style="color:#71717a;word-break:break-all;">${link}</span>
+       <span style="color:#d6dde8;word-break:break-all;">${link}</span>
      </p>
-     <p style="margin:20px 0 0;font-size:12px;line-height:1.5;color:#a1a1aa;">
+     <p style="margin:22px 0 0;font-size:12px;line-height:1.5;color:${TEXT_MUTED};">
        If you didn't create an account, you can safely ignore this email.
      </p>`
   );
@@ -109,13 +119,13 @@ export function welcomeEmailHtml({
   return shell(
     "Welcome to Next Fixture",
     siteUrl,
-    `<p style="margin:20px 0 12px;font-size:15px;line-height:1.5;color:#18181b;">
+    `<p style="margin:22px 0 12px;font-size:15px;line-height:1.6;color:${TEXT_MAIN};">
        Welcome aboard, ${displayName} — your email is verified! You can now take part in the match discussions under every preview:
        share your thoughts, post predictions and reply to other fans.
      </p>
-     <p style="margin:24px 0;">
-       <a href="${siteUrl}/" style="display:inline-block;background:#002b5c;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-size:14px;font-weight:600;">Browse fixtures</a>
+     <p style="margin:26px 0;">
+       <a href="${siteUrl}/" style="display:inline-block;background:${YELLOW};color:${NAVY_DEEP};text-decoration:none;padding:13px 24px;border-radius:8px;font-size:14px;font-weight:700;">Browse fixtures</a>
      </p>
-     <p style="margin:0;font-size:12px;line-height:1.5;color:#a1a1aa;">See you on matchday. — The Next Fixture team</p>`
+     <p style="margin:0;font-size:12px;line-height:1.5;color:${TEXT_MUTED};">See you on matchday. — The Next Fixture team</p>`
   );
 }
