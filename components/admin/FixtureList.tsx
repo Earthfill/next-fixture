@@ -160,7 +160,9 @@ export default function FixtureList({ fixtures, overriddenSlugs, hiddenSlugs, fl
           ok: true,
           text: willHide
             ? `"${f.homeTeam.name} vs ${f.awayTeam.name}" is now hidden from the public site.`
-            : `"${f.homeTeam.name} vs ${f.awayTeam.name}" is visible again.`,
+            : reviewHidden
+              ? `"${f.homeTeam.name} vs ${f.awayTeam.name}" is no longer manually hidden, but it stays hidden from the public site because its prediction still needs review — use Edit to fix the prediction and it will be published.`
+              : `"${f.homeTeam.name} vs ${f.awayTeam.name}" is visible again.`,
         });
       } else {
         setActionMessage({ ok: false, text: data.error || "Failed to update visibility." });

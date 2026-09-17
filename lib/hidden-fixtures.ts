@@ -9,6 +9,12 @@
 // cache so public pages don't pay a DB round-trip on every render; after a
 // hide/unhide the cache is refreshed immediately (with a bounded read-back so
 // a slow replica can't leave a stale entry behind).
+//
+// A read that fails (PG down, pooler saturated, query timeout) must NEVER be
+// treated as an empty store: doing so re-publishes every hidden match on the
+// public site — and because the listing pages are ISR-cached for 5 minutes, one
+// blip could be frozen into HTML for that whole window. Failed reads therefore
+// keep serving the last successfully read set and retry within seconds.
 // ---------------------------------------------------------------------------
 
 import {
@@ -32,33 +38,61 @@ function canonicalSlug(slug: string): string {
 // per render.
 const MEMORY_TTL_MS = 30_000;
 
+// After a FAILED read we serve the last known set for this long before trying
+// Postgres again — earlier than the normal TTL so a transient blip resolves
+// quickly, but long enough that a struggling database isn't hit on every render
+// (each attempt can otherwise block for the whole connect timeout).
+const RETRY_TTL_MS = 5_000;
+
 let memorySet: Set<string> | null = null;
 let memoryExpiresAt = 0;
-let inflight: Promise<Set<string>> | null = null;
+// Last set that came from a SUCCESSFUL read. Never cleared by a failed read, so
+// one PG hiccup (timeout, pooler saturation, cold start during a deploy) can
+// never wipe the hidden knowledge of a process that already had it.
+let lastGoodSet: Set<string> | null = null;
+let inflight: Promise<Set<string> | null> | null = null;
 
 function refreshMemory(items: string[]): void {
-  memorySet = new Set(items);
+  // Store canonical keys — legacy rows written before slugs were ASCII-safe
+  // (e.g. "…münchen…") still have to match the fixture's generated slug.
+  memorySet = new Set(items.map(canonicalSlug));
+  lastGoodSet = memorySet;
   memoryExpiresAt = Date.now() + MEMORY_TTL_MS;
 }
 
-/** Read the current hidden slugs from Postgres (source of truth). */
-async function readFromPg(): Promise<Set<string>> {
-  const slugs = await pgHiddenList().catch(() => [] as string[]);
+/**
+ * Read the current hidden slugs from Postgres (source of truth).
+ * Returns `null` when the read failed, in which case the caller must keep
+ * serving the last known set instead of assuming nothing is hidden.
+ */
+async function readFromPg(): Promise<Set<string> | null> {
+  const slugs = await pgHiddenList().catch(() => null);
+  if (slugs === null) {
+    // A read that couldn't complete is NOT an empty store: keep the last known
+    // set (memorySet stays untouched) and retry shortly.
+    memoryExpiresAt = (memorySet ?? lastGoodSet) ? Date.now() + RETRY_TTL_MS : 0;
+    console.warn("[admin:hidden] list unavailable — keeping last known hidden set");
+    return null;
+  }
   refreshMemory(slugs);
-  return memorySet as Set<string>;
+  return memorySet;
 }
 
 /** Get the hidden set, using the process-local cache when it's fresh. */
 export async function getHiddenSlugs(): Promise<Set<string>> {
   await initPostgres();
 
-  if (memorySet && Date.now() < memoryExpiresAt) {
-    return memorySet;
+  // The freshness window is honoured for the last successfully read set too, so
+  // a failing store degrades to "same as last time" instead of a DB attempt on
+  // every single render.
+  const lastKnown = memorySet ?? lastGoodSet;
+  if (lastKnown && Date.now() < memoryExpiresAt) {
+    return lastKnown;
   }
 
   if (!pgAvailable()) {
-    // No-PG fallback: keep whatever we last knew.
-    return memorySet ?? new Set<string>();
+    // No-PG fallback: keep whatever we last knew — never fall back to "empty".
+    return lastKnown ?? new Set<string>();
   }
 
   // Coalesce concurrent refreshes into a single PG call.
@@ -67,7 +101,8 @@ export async function getHiddenSlugs(): Promise<Set<string>> {
       inflight = null;
     });
   }
-  return inflight;
+  const fresh = await inflight;
+  return fresh ?? lastKnown ?? new Set<string>();
 }
 
 /** Drop every fixture/slug that is hidden from the public site. */
@@ -90,6 +125,26 @@ export interface SetHiddenResult {
 }
 
 /**
+ * Delete stored rows that normalise to `key` but are not stored in canonical
+ * form, e.g. legacy rows written before slugs were made ASCII-safe
+ * ("1635632--bayern-münchen-vs-bodo/glimt"). Those rows can never be matched by
+ * the canonical key, so without this sweep un-hiding such a fixture in /admin
+ * would look like it worked while the match stayed hidden.
+ */
+async function removeLegacyRows(key: string): Promise<boolean> {
+  const rows = await pgHiddenList().catch(() => null);
+  if (!rows) return false;
+  let removed = false;
+  for (const row of rows) {
+    if (row !== key && canonicalSlug(row) === key) {
+      const ok = await pgHiddenRemove(row).catch(() => false);
+      removed = removed || ok;
+    }
+  }
+  return removed;
+}
+
+/**
  * Hide or un-hide a fixture. The write is made durable (sync pool drain) and
  * then verified with a bounded read-back so an immediate public render sees the
  * new state. The refreshed hidden set is returned.
@@ -106,6 +161,16 @@ async function setHidden(slug: string, shouldHide: boolean): Promise<SetHiddenRe
     if (persisted) {
       await pgDrainPool();
     }
+    if (!shouldHide) {
+      // A legacy row is stored under a different key, so the delete above found
+      // nothing and reported "not persisted" — sweep it and count that as the
+      // write, or /admin would show the un-hide as failed while it worked.
+      const swept = await removeLegacyRows(key);
+      if (swept) {
+        persisted = true;
+        await pgDrainPool();
+      }
+    }
   }
 
   // Force the memory cache to re-read from PG right away (even on no-PG the
@@ -114,10 +179,13 @@ async function setHidden(slug: string, shouldHide: boolean): Promise<SetHiddenRe
   memoryExpiresAt = 0;
 
   if (pgAvailable()) {
-    // Bounded read-back: give a laggy replica a moment to catch up.
-    let hidden: Set<string> = new Set();
+    // Bounded read-back: give a laggy replica a moment to catch up. A read that
+    // can't complete (PG down/slow) keeps the last known set — an empty set
+    // would tell the route the change never landed and re-publish the match.
+    let hidden: Set<string> = lastGoodSet ?? new Set<string>();
     for (let attempt = 0; attempt < 5; attempt++) {
-      hidden = await readFromPg();
+      const read = await readFromPg();
+      if (read) hidden = read;
       const matches = hidden.has(key) === shouldHide;
       if (matches) return { hidden, persisted };
       if (attempt < 4) {
@@ -128,7 +196,7 @@ async function setHidden(slug: string, shouldHide: boolean): Promise<SetHiddenRe
   }
 
   // No-PG fallback: update the process-local copy directly.
-  const next = new Set<string>(memorySet ?? []);
+  const next = new Set<string>(memorySet ?? lastGoodSet ?? []);
   if (shouldHide) next.add(key);
   else next.delete(key);
   refreshMemory([...next]);

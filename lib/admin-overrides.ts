@@ -19,6 +19,7 @@ import {
   pgOverrideSet,
   pgOverrideDelete,
   pgOverrideList,
+  pgOverrideRows,
 } from "@/lib/cache/postgres";
 import { normalizeSlug } from "@/lib/football/config";
 
@@ -164,4 +165,51 @@ export async function getOverriddenSlugs(slugs: string[]): Promise<string[]> {
     const mem = memoryStore.get(canonicalSlug(slug)) ?? memoryStore.get(slug);
     return mem !== undefined && !isExpired(mem);
   });
+}
+
+/**
+ * Override VALUES for many slugs, in ONE store read.
+ *
+ * A public listing decides show/hide per fixture by whether its prediction has
+ * been reviewed, which needs the override values for every fixture on the page.
+ * The per-slug read (`getAdminOverride`) is correct but costs a round trip
+ * each — hundreds per render, and the same list is walked once per matchday —
+ * so listings use this batched form instead.
+ */
+export async function getOverrideMap(slugs: string[]): Promise<Map<string, AdminOverride>> {
+  await initPostgres();
+  const map = new Map<string, AdminOverride>();
+  if (slugs.length === 0) return map;
+
+  if (pgAvailable()) {
+    // Query the canonical (ASCII) form AND the raw form — older fixtures / DB
+    // rows can carry non-ASCII characters (e.g. "fenerbahçe") while new ones are
+    // URL-safe. Both resolve to the same canonical key for the caller.
+    const keys = [...new Set(slugs.flatMap((s) => {
+      const k = canonicalSlug(s);
+      return k === s ? [k] : [k, s];
+    }))];
+    const rows = await pgOverrideRows(keys).catch(() => []);
+    for (const row of rows) {
+      const override: AdminOverride = {
+        predictedScore: row.predictedScore,
+        tip: row.tip,
+        winProbability: row.winProbability,
+        previewText: row.previewText,
+        expiresAt: row.expiresAt,
+      };
+      const key = canonicalSlug(row.slug);
+      map.set(key, override);
+      memoryStore.set(key, override);
+    }
+    return map;
+  }
+
+  // No-PG fallback (dev/standalone): process-local memory only.
+  for (const slug of slugs) {
+    const key = canonicalSlug(slug);
+    const mem = memoryStore.get(key) ?? memoryStore.get(slug);
+    if (mem && !isExpired(mem)) map.set(key, mem);
+  }
+  return map;
 }

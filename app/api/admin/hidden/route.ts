@@ -9,6 +9,8 @@ import { revalidatePath } from "next/cache";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { hideFixture, unhideFixture } from "@/lib/hidden-fixtures";
 import { normalizeSlug } from "@/lib/football/config";
+import { invalidateCache } from "@/lib/cache";
+import { upcomingFixturesKey, UPCOMING_DAYS } from "@/lib/cache/keys";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,11 +58,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Public pages re-render per request, but revalidate anyway for any host that
-  // keeps a full-route cache (self-host, proxies).
+  // The listing pages (/ , /fixtures , /fixtures/[date]) are ISR-cached for 5
+  // minutes, so a hide must invalidate them explicitly or the match keeps
+  // rendering from the already-generated HTML for up to 5 minutes. Also drop the
+  // cached upcoming-fixtures snapshot the homepage filters against, so it
+  // refetches a fresh list whose slugs match the one just stored. Same sequence
+  // as /api/admin/override, whose edits are known to appear immediately.
+  await invalidateCache(upcomingFixturesKey(UPCOMING_DAYS)).catch(() => undefined);
   try {
     revalidatePath("/", "layout");
+    revalidatePath("/");
     revalidatePath("/fixtures");
+    revalidatePath("/fixtures/[date]", "page");
     revalidatePath(`/previews/${slug}`);
   } catch {
     // non-fatal

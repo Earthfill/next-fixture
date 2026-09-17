@@ -17,7 +17,7 @@
 import { cacheAside, writeCache, peekCache, invalidateCache } from "@/lib/cache";
 import { predictionReviewKey, standingsKey, upcomingFixturesKey, UPCOMING_DAYS, TTL } from "@/lib/cache/keys";
 import { getHiddenSlugs, isSlugHidden } from "@/lib/hidden-fixtures";
-import { getAdminOverride, getOverriddenSlugs } from "@/lib/admin-overrides";
+import { getAdminOverride, getOverrideMap, type AdminOverride } from "@/lib/admin-overrides";
 import { initPostgres, pgAvailable } from "@/lib/cache/postgres";
 import { evaluatePrediction } from "@/lib/prediction-review";
 import { normalizeSlug } from "@/lib/football/config";
@@ -62,11 +62,14 @@ export async function filterPublicVisible<T extends { slug?: string }>(items: T[
   const slugs = items.map((i) => i.slug).filter((s): s is string => Boolean(s));
   if (slugs.length === 0) return items;
 
-  const [manualHidden, overridden] = await Promise.all([
+  // ONE batched store read each. The override VALUES are needed here (the review
+  // gate below compares the effective tip/scoreline), and reading them per
+  // fixture costs hundreds of round trips per listing render.
+  const [manualHidden, overrideMap] = await Promise.all([
     getHiddenSlugs(),
-    getOverriddenSlugs(slugs),
+    getOverrideMap(slugs),
   ]);
-  const overriddenSet = new Set(overridden.map((s) => canonicalSlug(s)));
+  const overriddenSet = new Set(overrideMap.keys());
 
   // The review gate below relies on admin overrides being readable from THIS
   // process. If the durable store (PostgreSQL) is unavailable, overrides are
@@ -83,13 +86,9 @@ export async function filterPublicVisible<T extends { slug?: string }>(items: T[
     });
   }
 
-  // Resolve each fixture's review state in parallel (reads only cached data).
-  const reviews = await Promise.all(slugs.map((s) => getPredictionReview(s).catch(() => null)));
-  const reviewBySlug = new Map<string, PredictionReviewResult>();
-  reviews.forEach((r, i) => {
-    const s = slugs[i];
-    if (r && s) reviewBySlug.set(canonicalSlug(s), r);
-  });
+  // Resolve each fixture's review state from cached data — one memoized
+  // evaluation per fixture, reusing the override values read above.
+  const reviewBySlug = await getPredictionReviews(slugs, overrideMap);
 
   return items.filter((item) => {
     if (!item.slug) return true;
@@ -179,7 +178,7 @@ export async function getTopScorers(leagueSlug: string, limit?: number): Promise
 
 /** Top assists for a league (\24h. */
 export async function getTopAssists(leagueSlug: string, limit?: number): Promise<TopScorer[]> {
-  const lim = limit ??  ​10;
+  const lim = limit ??  10;
   const { data } = await cacheAside<TopScorer[]>(
     `topassists:v2:${leagueSlug}:${lim}`,
     TTL.fixtures,
@@ -298,21 +297,43 @@ export interface PredictionReviewResult {
 }
 
 /**
- * Evaluate a fixture's prediction for tip↔scoreline↔win-probability conflicts.
- * Cheap for the admin table: reads ONLY cached data (cached preview + admin
- * override) — never triggers an upstream API call.
+ * Per-process memo for prediction reviews.
+ *
+ * A public listing evaluates the review for EVERY fixture on the page, and the
+ * homepage walks the same fixture list once per matchday — so without a memo a
+ * single render asks the store for the same review several hundred times (the
+ * store is the bottleneck, not the evaluation). Entries are short-lived and are
+ * dropped the moment an admin edit invalidates the authoritative cached review.
  */
-export async function getPredictionReview(slug: string): Promise<PredictionReviewResult> {
-  // 1. Authoritative cached result (written by preview page render or override save).
-  const key = canonicalSlug(slug);
-  const cached = await peekCache<PredictionReviewResult>(predictionReviewKey(key));
-  if (cached) return cached;
+const REVIEW_MEMO_TTL_MS = 60_000;
+const reviewMemo = new Map<string, { result: PredictionReviewResult; expiresAt: number }>();
 
-  // 2. Best-effort from the cached preview payload + admin override.
-  const [override, preview] = await Promise.all([
-    getAdminOverride(key),
-    peekCache<MatchPreview>(`preview:${key}`),
-  ]);
+function memoReview(key: string, result: PredictionReviewResult): PredictionReviewResult {
+  if (reviewMemo.size > 2000) {
+    const now = Date.now();
+    for (const [k, v] of reviewMemo) if (v.expiresAt <= now) reviewMemo.delete(k);
+  }
+  reviewMemo.set(key, { result, expiresAt: Date.now() + REVIEW_MEMO_TTL_MS });
+  return result;
+}
+
+/** Still-warm memoized review for a fixture key, or null. */
+function memoizedReview(key: string): PredictionReviewResult | null {
+  const hit = reviewMemo.get(key);
+  if (!hit) return null;
+  if (hit.expiresAt <= Date.now()) {
+    reviewMemo.delete(key);
+    return null;
+  }
+  return hit.result;
+}
+
+/** Evaluate a fixture's effective prediction (cached preview + given override). */
+async function computeReview(
+  key: string,
+  override: AdminOverride | null
+): Promise<PredictionReviewResult> {
+  const preview = await peekCache<MatchPreview>(`preview:${key}`);
   const prediction = preview?.prediction;
   if (!preview?.fixture || !prediction?.predictedScore || !prediction?.tip) {
     return { flagged: false, reasons: [], available: false };
@@ -346,14 +367,66 @@ export async function getPredictionReview(slug: string): Promise<PredictionRevie
   return { flagged: review.flagged, reasons: review.reasons, available: true };
 }
 
+/**
+ * Resolve a fixture's review from already-cached data. `overrideFor` is only
+ * consulted on a miss, so a batched caller never pays for a store round trip it
+ * already did itself.
+ */
+async function reviewFrom(
+  slug: string,
+  overrideFor: () => Promise<AdminOverride | null>
+): Promise<PredictionReviewResult> {
+  const key = canonicalSlug(slug);
+  const warm = memoizedReview(key);
+  if (warm) return warm;
+  // Authoritative cached result (written by a preview page render or an override save).
+  const cached = await peekCache<PredictionReviewResult>(predictionReviewKey(key));
+  if (cached) return memoReview(key, cached);
+  return memoReview(key, await computeReview(key, await overrideFor()));
+}
+
+/**
+ * Evaluate a fixture's prediction for tip↔scoreline↔win-probability conflicts.
+ * Cheap for the admin table: reads ONLY cached data (cached preview + admin
+ * override) — never triggers an upstream API call.
+ */
+export async function getPredictionReview(slug: string): Promise<PredictionReviewResult> {
+  return reviewFrom(slug, () => getAdminOverride(canonicalSlug(slug)));
+}
+
+/**
+ * Batched review lookup for a listing. `overrideMap` comes from the single
+ * batched override read the caller already performed, so no per-fixture store
+ * round trip happens here.
+ */
+async function getPredictionReviews(
+  slugs: string[],
+  overrideMap: Map<string, AdminOverride>
+): Promise<Map<string, PredictionReviewResult>> {
+  const out = new Map<string, PredictionReviewResult>();
+  await Promise.all(
+    slugs.map(async (s) => {
+      const key = canonicalSlug(s);
+      out.set(key, await reviewFrom(key, async () => overrideMap.get(key) ?? null));
+    })
+  );
+  return out;
+}
+
 /** Persist an authoritative review result (preview page render, override save). */
 export async function writePredictionReview(slug: string, result: PredictionReviewResult): Promise<void> {
-  await writeCache(predictionReviewKey(canonicalSlug(slug)), result, TTL.preview).catch(() => undefined);
+  const key = canonicalSlug(slug);
+  // Keep the per-process memo in step with the authoritative value (the admin
+  // route writes then immediately re-reads it).
+  memoReview(key, result);
+  await writeCache(predictionReviewKey(key), result, TTL.preview).catch(() => undefined);
 }
 
 /** Drop the cached review so the next read recomputes (after an admin edit). */
 export async function invalidatePredictionReview(slug: string): Promise<void> {
-  await invalidateCache(predictionReviewKey(canonicalSlug(slug))).catch(() => undefined);
+  const key = canonicalSlug(slug);
+  reviewMemo.delete(key);
+  await invalidateCache(predictionReviewKey(key)).catch(() => undefined);
 }
 
 // ─── Team-page data adapters (cached) ─────────────────────────────────

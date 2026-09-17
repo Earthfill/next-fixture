@@ -68,35 +68,86 @@ function createPool(): Pool | null {
   });
 }
 
+// ---------- Availability lifecycle ------------------------------------------
+// A database blip must never turn into a stuck app. Two things used to cause
+// exactly that on the public pages:
+//
+//   1. NO BACKOFF — every caller re-attempted the connection. One listing
+//      render fans out to hundreds of store reads, so a struggling database
+//      was hit with hundreds of fresh 10s connect attempts per request.
+//   2. STALE `available` — once the pool had connected successfully the flag
+//      stayed true while queries timed out, so callers kept queueing slow
+//      attempts instead of taking their no-PG fallback path.
+//
+// Both are fixed by a cooldown: after a failure the store is marked down for
+// RETRY_AFTER_MS, during which `pgAvailable()` is false (callers immediately
+// use their in-memory/no-PG paths) and not a single connection is attempted.
+
+const RETRY_AFTER_MS = 30_000;
+let downUntil = 0;
+
+/** Connection-level failures (reachability) — as opposed to, say, a constraint
+ * violation, which says nothing about whether the database is reachable. */
+const CONNECTION_FAILURE =
+  /timeout exceeded when trying to connect|ECONNREFUSED|ECONNRESET|ENOTFOUND|EHOSTUNREACH|ETIMEDOUT|Connection terminated|server closed the connection|too many clients|terminating connection/i;
+
+function isConnectionFailure(err: unknown): boolean {
+  return CONNECTION_FAILURE.test(String((err as Error)?.message ?? err));
+}
+
+/** Mark the store down for a cooldown and release the pool it was using. */
+function markDown(): void {
+  available = false;
+  downUntil = Date.now() + RETRY_AFTER_MS;
+  const stale = pool;
+  pool = null;
+  // end() disposes queued/pending clients. Without it a discarded pool keeps
+  // its connect attempts (and their timers) alive.
+  void stale?.end().catch(() => undefined);
+}
+
+/** Log a store failure, and back off when it means the database is unreachable. */
+function noteFailure(label: string, err: unknown): void {
+  console.warn(label, (err as Error)?.message ?? err);
+  if (isConnectionFailure(err)) markDown();
+}
+
 /**
  * Initialize the pool (connect + cheap availability check). This intentionally
  * does NOT run any DDL - schema is applied once at deploy time by
- * `npm run migrate` (scripts/migrate.ts). Safe to call repeatedly.
+ * `npm run migrate` (scripts/migrate.ts). Safe to call repeatedly: concurrent
+ * callers share one attempt, and a failure is not retried until the cooldown
+ * above has elapsed.
  */
 export async function initPostgres(): Promise<boolean> {
+  if (!process.env.DATABASE_URL) return false;
+  if (available && pool) return true;
   if (initPromise) return initPromise;
+  if (Date.now() < downUntil) return false; // cooling down after a failure
 
-  if (!process.env.DATABASE_URL) {
-    initPromise = Promise.resolve(false);
-    return initPromise;
-  }
-
-  initPromise = (async () => {
+  const attempt = (async () => {
     try {
-      pool = createPool();
-      if (!pool) return false;
-      await pool.query("SELECT 1");
+      const created = createPool();
+      if (!created) return false;
+      pool = created;
+      await created.query("SELECT 1");
       available = true;
+      downUntil = 0;
+      return true;
     } catch (err) {
-      available = false;
-      pool = null;
-      initPromise = null; // allow a retry on the next request
-      console.warn("[cache:pg] unavailable:", (err as Error).message);
+      // An init failure is never worth retrying per-request (bad credentials,
+      // unreachable host, pooler refusing) — back off regardless of the cause.
+      console.warn("[cache:pg] unavailable:", (err as Error)?.message ?? err);
+      markDown();
+      return false;
     }
-    return available;
   })();
 
-  return initPromise;
+  initPromise = attempt;
+  void attempt.finally(() => {
+    if (initPromise === attempt) initPromise = null;
+  });
+  return attempt;
 }
 
 export function pgAvailable(): boolean {
@@ -115,7 +166,7 @@ export async function pgCacheGet<T>(key: string): Promise<T | null> {
     );
     return (res.rows[0]?.payload as T) ?? null;
   } catch (err) {
-    console.warn("[cache:pg] get failed:", (err as Error).message);
+    noteFailure("[cache:pg] get failed:", err);
     return null;
   }
 }
@@ -133,7 +184,7 @@ export async function pgCacheSet(key: string, payload: unknown, ttlSeconds: numb
     );
     return true;
   } catch (err) {
-    console.warn("[cache:pg] set failed:", (err as Error).message);
+    noteFailure("[cache:pg] set failed:", err);
     return false;
   }
 }
@@ -174,6 +225,20 @@ export interface AdminOverrideRow {
   expiresAt: string;
 }
 
+/** Map a raw admin_overrides row to the reader shape — shared by the per-slug
+ * and batched readers so both always agree. */
+function mapOverrideRow(row: Record<string, unknown>): AdminOverrideRow {
+  return {
+    slug: String(row.slug),
+    predictedScore: (row.predicted_score as AdminOverrideRow["predictedScore"]) ?? null,
+    tip: (row.tip as string) ?? null,
+    winProbability: (row.win_probability as AdminOverrideRow["winProbability"]) ?? null,
+    previewText: (row.preview_text as string) ?? null,
+    expiresAt:
+      row.expires_at instanceof Date ? row.expires_at.toISOString() : String(row.expires_at),
+  };
+}
+
 export async function pgOverrideGet(slug: string): Promise<AdminOverrideRow | null> {
   await initPostgres();
   if (!pool || !available) return null;
@@ -185,21 +250,35 @@ export async function pgOverrideGet(slug: string): Promise<AdminOverrideRow | nu
       [slug]
     );
     const row = res.rows[0];
-    if (!row) return null;
-    return {
-      slug: row.slug,
-      predictedScore: row.predicted_score ?? null,
-      tip: row.tip ?? null,
-      winProbability: row.win_probability ?? null,
-      previewText: row.preview_text ?? null,
-      expiresAt:
-        row.expires_at instanceof Date
-          ? row.expires_at.toISOString()
-          : String(row.expires_at),
-    };
+    return row ? mapOverrideRow(row) : null;
   } catch (err) {
-    console.warn("[admin:override] pg get failed:", (err as Error).message);
+    noteFailure("[admin:override] pg get failed:", err);
     return null;
+  }
+}
+
+/**
+ * Override rows for MANY slugs in ONE query.
+ *
+ * Public listings need the override *values* (not just their presence) for every
+ * fixture on the page, and the same page render visits the same fixture list
+ * once per matchday — reading them per slug costs hundreds of round trips per
+ * render. One batched read replaces the whole fan-out.
+ */
+export async function pgOverrideRows(slugs: string[]): Promise<AdminOverrideRow[]> {
+  await initPostgres();
+  if (!pool || !available || slugs.length === 0) return [];
+  try {
+    const res = await pool.query(
+      `SELECT slug, predicted_score, tip, win_probability, preview_text, expires_at
+       FROM "${OVERRIDES_TABLE}"
+       WHERE slug = ANY($1) AND expires_at > now()`,
+      [slugs]
+    );
+    return res.rows.map(mapOverrideRow);
+  } catch (err) {
+    noteFailure("[admin:override] pg rows failed:", err);
+    return [];
   }
 }
 
@@ -239,7 +318,7 @@ export async function pgOverrideSet(
     );
     return true;
   } catch (err) {
-    console.warn("[admin:override] pg set failed:", (err as Error).message);
+    noteFailure("[admin:override] pg set failed:", err);
     return false;
   }
 }
@@ -265,7 +344,10 @@ export async function pgOverrideList(slugs: string[]): Promise<string[]> {
       [slugs]
     );
     return res.rows.map((r) => r.slug);
-  } catch {
+  } catch (err) {
+    // A failed read must not look like "no overrides" silently: log it and let
+    // the cooldown in noteFailure take the store out of rotation.
+    noteFailure("[admin:override] pg list failed:", err);
     return [];
   }
 }
@@ -274,16 +356,23 @@ export async function pgOverrideList(slugs: string[]): Promise<string[]> {
 
 const HIDDEN_TABLE = "hidden_fixtures";
 
-/** Every slug currently hidden from the public site. */
-export async function pgHiddenList(): Promise<string[]> {
+/**
+ * Every slug currently hidden from the public site.
+ *
+ * Returns `null` when the list could not be read (PG unavailable, or the query
+ * failed/timed out) so callers can tell "nothing is hidden" apart from "could
+ * not ask". A failed read must never be mistaken for an empty store — that
+ * re-publishes every hidden fixture on the public site.
+ */
+export async function pgHiddenList(): Promise<string[] | null> {
   await initPostgres();
-  if (!pool || !available) return [];
+  if (!pool || !available) return null;
   try {
     const res = await pool.query(`SELECT slug FROM "${HIDDEN_TABLE}"`);
     return res.rows.map((r) => String(r.slug));
   } catch (err) {
-    console.warn("[admin:hidden] pg list failed:", (err as Error).message);
-    return [];
+    noteFailure("[admin:hidden] pg list failed:", err);
+    return null;
   }
 }
 
@@ -299,7 +388,7 @@ export async function pgHiddenAdd(slug: string): Promise<boolean> {
     );
     return true;
   } catch (err) {
-    console.warn("[admin:hidden] pg add failed:", (err as Error).message);
+    noteFailure("[admin:hidden] pg add failed:", err);
     return false;
   }
 }
@@ -312,7 +401,7 @@ export async function pgHiddenRemove(slug: string): Promise<boolean> {
     await pool.query(`DELETE FROM "${HIDDEN_TABLE}" WHERE slug = $1`, [slug]);
     return true;
   } catch (err) {
-    console.warn("[admin:hidden] pg remove failed:", (err as Error).message);
+    noteFailure("[admin:hidden] pg remove failed:", err);
     return false;
   }
 }
@@ -335,7 +424,7 @@ export async function pgSettingGet(key: string): Promise<string | null> {
     );
     return res.rows[0]?.value ?? null;
   } catch (err) {
-    console.warn("[settings:pg] get failed:", (err as Error).message);
+    noteFailure("[settings:pg] get failed:", err);
     return null;
   }
 }
@@ -353,7 +442,7 @@ export async function pgSettingSet(key: string, value: string): Promise<boolean>
     );
     return true;
   } catch (err) {
-    console.warn("[settings:pg] set failed:", (err as Error).message);
+    noteFailure("[settings:pg] set failed:", err);
     return false;
   }
 }
@@ -393,7 +482,7 @@ export async function pgUserFindByEmail(email: string): Promise<AppUserRow | nul
       verifiedAt: row.verified_at ? toIso(row.verified_at) : null,
     };
   } catch (err) {
-    console.warn("[auth:pg] find by email failed:", (err as Error).message);
+    noteFailure("[auth:pg] find by email failed:", err);
     return null;
   }
 }
@@ -417,7 +506,7 @@ export async function pgUserGetById(id: string): Promise<AppUserRow | null> {
       verifiedAt: row.verified_at ? toIso(row.verified_at) : null,
     };
   } catch (err) {
-    console.warn("[auth:pg] get user failed:", (err as Error).message);
+    noteFailure("[auth:pg] get user failed:", err);
     return null;
   }
 }
@@ -438,7 +527,7 @@ export async function pgUserCreate(data: {
     );
     return true;
   } catch (err) {
-    console.warn("[auth:pg] create user failed:", (err as Error).message);
+    noteFailure("[auth:pg] create user failed:", err);
     return false;
   }
 }
@@ -458,7 +547,7 @@ export async function pgSessionCreate(data: {
     );
     return true;
   } catch (err) {
-    console.warn("[auth:pg] create session failed:", (err as Error).message);
+    noteFailure("[auth:pg] create session failed:", err);
     return false;
   }
 }
@@ -477,7 +566,7 @@ export async function pgSessionGet(token: string): Promise<{ userId: string } | 
     const row = res.rows[0];
     return row ? { userId: row.user_id } : null;
   } catch (err) {
-    console.warn("[auth:pg] get session failed:", (err as Error).message);
+    noteFailure("[auth:pg] get session failed:", err);
     return null;
   }
 }
@@ -548,7 +637,7 @@ export async function pgChatList(
       email: r.email ?? null,
     }));
   } catch (err) {
-    console.warn("[chat:pg] list failed:", (err as Error).message);
+    noteFailure("[chat:pg] list failed:", err);
     return [];
   }
 }
@@ -586,7 +675,7 @@ export async function pgChatCreate(data: {
       email: null,
     };
   } catch (err) {
-    console.warn("[chat:pg] create failed:", (err as Error).message);
+    noteFailure("[chat:pg] create failed:", err);
     return null;
   }
 }
@@ -603,7 +692,7 @@ export async function pgChatRemove(id: string, removedBy: string): Promise<boole
     );
     return true;
   } catch (err) {
-    console.warn("[chat:pg] remove failed:", (err as Error).message);
+    noteFailure("[chat:pg] remove failed:", err);
     return false;
   }
 }
@@ -624,7 +713,7 @@ export async function pgChatModerate(id: string, action: "approve" | "delete"): 
     }
     return true;
   } catch (err) {
-    console.warn("[chat:pg] moderate failed:", (err as Error).message);
+    noteFailure("[chat:pg] moderate failed:", err);
     return false;
   }
 }
@@ -670,7 +759,7 @@ export async function pgAdminChatList(limit = 200): Promise<ChatMessageRow[]> {
       email: r.email ?? null,
     }));
   } catch (err) {
-    console.warn("[chat:pg] admin list failed:", (err as Error).message);
+    noteFailure("[chat:pg] admin list failed:", err);
     return [];
   }
 }
@@ -706,7 +795,7 @@ export async function pgEmailTokenCreate(data: {
     );
     return true;
   } catch (err) {
-    console.warn("[email:pg] token create failed:", (err as Error).message);
+    noteFailure("[email:pg] token create failed:", err);
     return false;
   }
 }
@@ -736,7 +825,7 @@ export async function pgEmailTokenGetValid(
       expiresAt: toIso(row.expires_at),
     };
   } catch (err) {
-    console.warn("[email:pg] token get failed:", (err as Error).message);
+    noteFailure("[email:pg] token get failed:", err);
     return null;
   }
 }
@@ -766,7 +855,7 @@ export async function pgUserSetVerified(userId: string): Promise<boolean> {
     );
     return true;
   } catch (err) {
-    console.warn("[email:pg] set verified failed:", (err as Error).message);
+    noteFailure("[email:pg] set verified failed:", err);
     return false;
   }
 }
@@ -803,7 +892,7 @@ export async function pgCleanupStaleData(): Promise<CleanupStats | null> {
       tokens: tokensRes.rowCount ?? 0,
     };
   } catch (err) {
-    console.warn("[cleanup:pg] failed:", (err as Error).message);
+    noteFailure("[cleanup:pg] failed:", err);
     return null;
   }
 }
