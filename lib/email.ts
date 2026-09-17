@@ -51,3 +51,20 @@ export async function sendEmail({ to, subject, html, text }: SendEmailInput): Pr
     return { ok: false, error: "exception" };
   }
 }
+
+/**
+ * Like sendEmail, but bounded by a timeout so a hung Resend call can never block
+ * the registration response indefinitely. Used by the auth routes that must
+ * report honestly whether the email actually went out.
+ */
+export async function sendEmailWithTimeout(
+  input: SendEmailInput,
+  timeoutMs = 8000
+): Promise<{ ok: boolean; error?: string }> {
+  return Promise.race([
+    sendEmail(input),
+    new Promise<{ ok: false; error: string }>((resolve) =>
+      setTimeout(() => resolve({ ok: false, error: "timeout" }), timeoutMs)
+    ),
+  ]);
+}

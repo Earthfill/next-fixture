@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, MessageSquare } from "lucide-react";
 import FootballMatchCard from "@/components/football/FootballMatchCard";
 
 import type { MatchdayGroup } from "@/lib/types";
@@ -151,7 +151,31 @@ export default function MatchdayList({ matchdays }: Props) {
                     <hr className="sm-divider mt-1 mb-0" />
                     <div className="border border-zinc-200 bg-white">
                       {league.fixtures.map((fixture) => (
-                        <FootballMatchCard key={fixture.id} fixture={fixture} />
+                        <div
+                          key={fixture.id}
+                          className="flex items-stretch border-b border-zinc-100 transition-colors hover:bg-zinc-50 last:border-b-0"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <FootballMatchCard fixture={fixture} />
+                          </div>
+                          {/* Chat affordance — a sibling link (never nested inside
+                              the card's anchor) that jumps straight to this
+                              match's discussion thread on the preview page.
+                              Finished matches have no thread (the cron removes
+                              them), so the icon is hidden for those. */}
+                          {fixture.status !== "finished" && (
+                            <Link
+                              href={`/previews/${fixture.slug}#discussion`}
+                              prefetch={false}
+                              title="Join the match chat"
+                              aria-label={`Join the chat for ${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`}
+                              className="flex shrink-0 items-center gap-1.5 border-l border-zinc-100 px-3 text-[11px] font-medium text-zinc-400 transition-colors hover:text-[#002b5c]"
+                            >
+                              <MessageSquare className="h-3.5 w-3.5" />
+                              <span className="hidden md:inline">Chat</span>
+                            </Link>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>

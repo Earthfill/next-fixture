@@ -122,6 +122,24 @@ export async function createMessage(data: {
   return message;
 }
 
+/**
+ * Dev/no-PG only: per-user message counts across the in-memory threads, so the
+ * admin "Registered Users" drawer can show account activity without Postgres
+ * (mirrors what pgUserList counts in SQL).
+ */
+export function countMemoryMessagesByUser(): Map<string, { total: number; approved: number }> {
+  const counts = new Map<string, { total: number; approved: number }>();
+  for (const list of memoryStore.values()) {
+    for (const message of list) {
+      const entry = counts.get(message.user.id) ?? { total: 0, approved: 0 };
+      entry.total += 1;
+      if (message.moderationStatus === "approved") entry.approved += 1;
+      counts.set(message.user.id, entry);
+    }
+  }
+  return counts;
+}
+
 /** Look up a single message within a slug's thread (for self-removal checks). */
 export async function findMessage(slug: string, id: string): Promise<ChatMessage | null> {
   await initPostgres();

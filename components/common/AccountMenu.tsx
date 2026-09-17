@@ -5,37 +5,39 @@
 // out, or the user's display name + Logout when logged in.
 // ---------------------------------------------------------------------------
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogIn, LogOut, UserPlus } from "lucide-react";
-
-interface Me {
-  id: string;
-  displayName: string;
-  email: string;
-}
+import { LogIn, LogOut, MailWarning, UserPlus } from "lucide-react";
+import {
+  AUTH_CHANGED_EVENT,
+  getAuthSnapshot,
+  loadCurrentUser,
+  notifyAuthChanged,
+  subscribeAuth,
+  SERVER_AUTH_SNAPSHOT,
+} from "@/lib/auth-client";
 
 export default function AccountMenu() {
-  const [me, setMe] = useState<Me | null>(null);
-  const [checked, setChecked] = useState(false);
+  // Shared auth store rather than a one-shot fetch: this widget sits in the root
+  // layout and so never remounts on navigation. Reading the store means a
+  // successful login/register flips it immediately instead of after a reload.
+  const snapshot = useSyncExternalStore(subscribeAuth, getAuthSnapshot, () => SERVER_AUTH_SNAPSHOT);
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+  const me = snapshot.user;
 
+  // First load, then resync whenever the session changes elsewhere (another
+  // component, another tab) or the tab regains focus.
   useEffect(() => {
-    let active = true;
-    fetch("/api/auth/me", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : { user: null }))
-      .then((d) => {
-        if (active) {
-          setMe(d.user ?? null);
-          setChecked(true);
-        }
-      })
-      .catch(() => active && setChecked(true));
+    void loadCurrentUser();
+    const sync = () => void loadCurrentUser({ force: true });
+    window.addEventListener(AUTH_CHANGED_EVENT, sync);
+    window.addEventListener("focus", sync);
     return () => {
-      active = false;
+      window.removeEventListener(AUTH_CHANGED_EVENT, sync);
+      window.removeEventListener("focus", sync);
     };
   }, []);
 
@@ -45,10 +47,12 @@ export default function AccountMenu() {
     } catch {
       // ignore
     }
-    setMe(null);
+    notifyAuthChanged(null); // clears the store for every consumer at once
     setOpen(false);
     router.refresh();
   }
+
+  const checked = snapshot.loaded;
 
   // Desktop/inline style: compact menu on the right side of the nav bar.
   return (
@@ -83,6 +87,11 @@ export default function AccountMenu() {
               {me.displayName.charAt(0).toUpperCase()}
             </span>
             <span className="hidden lg:inline max-w-40 truncate">{me.displayName}</span>
+            {!me.verified && (
+              <span title="Email not verified yet">
+                <MailWarning aria-label="Email not verified yet" className="h-3.5 w-3.5 shrink-0 text-amber-300" />
+              </span>
+            )}
           </button>
           {open && (
             <button

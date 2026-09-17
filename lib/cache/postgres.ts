@@ -454,6 +454,7 @@ export async function pgSettingSet(key: string, value: string): Promise<boolean>
 const USERS_TABLE = "app_users";
 const SESSIONS_TABLE = "app_sessions";
 const CHAT_TABLE = "preview_chat_messages";
+const EMAIL_TOKENS_TABLE = "email_tokens";
 
 export interface AppUserRow {
   id: string;
@@ -528,6 +529,106 @@ export async function pgUserCreate(data: {
     return true;
   } catch (err) {
     noteFailure("[auth:pg] create user failed:", err);
+    return false;
+  }
+}
+
+/** Aggregate registered-user counts for the admin dashboard. Returns null when
+ *  Postgres is unreachable so the caller can render "unavailable" instead of 0. */
+export async function pgUserStats(): Promise<{ total: number; verified: number } | null> {
+  await initPostgres();
+  if (!pool || !available) return null;
+  try {
+    const res = await pool.query(
+      `SELECT count(*)::int AS total,
+              count(verified_at)::int AS verified
+       FROM "${USERS_TABLE}"`
+    );
+    const row = res.rows[0] ?? {};
+    return { total: Number(row.total ?? 0), verified: Number(row.verified ?? 0) };
+  } catch (err) {
+    noteFailure("[auth:pg] user stats failed:", err);
+    return null;
+  }
+}
+
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  displayName: string;
+  verifiedAt: string | null;
+  createdAt: string | null;
+  /** Chat messages posted by the account (any moderation status). */
+  messageCount: number;
+  /** Of those, the ones currently visible on the public site. */
+  approvedMessageCount: number;
+  /** Most recent session start — a proxy for "last login". */
+  lastSeenAt: string | null;
+  /** Unused, unexpired verify_email links — i.e. the account can still click. */
+  pendingTokenCount: number;
+  /** When the most recent verification email was generated (used to say how
+   *  long a pending account has been waiting). */
+  lastTokenSentAt: string | null;
+}
+
+/** Registered accounts for the admin "Registered Users" drawer, newest first,
+ *  each with its chat + session activity and any outstanding verification link.
+ *  Returns null when Postgres is unreachable so the caller can report "store
+ *  unavailable" instead of an empty list that looks like "no accounts". */
+export async function pgUserList(limit = 200): Promise<AdminUserRow[] | null> {
+  await initPostgres();
+  if (!pool || !available) return null;
+  try {
+    const res = await pool.query(
+      `SELECT u.id, u.email, u.display_name, u.verified_at, u.created_at,
+              (SELECT count(*)::int FROM "${CHAT_TABLE}" m
+                WHERE m.user_id = u.id) AS message_count,
+              (SELECT count(*)::int FROM "${CHAT_TABLE}" m
+                WHERE m.user_id = u.id AND m.moderation_status = 'approved') AS approved_message_count,
+              (SELECT max(s.created_at) FROM "${SESSIONS_TABLE}" s
+                WHERE s.user_id = u.id) AS last_seen_at,
+              (SELECT count(*)::int FROM "${EMAIL_TOKENS_TABLE}" t
+                WHERE t.user_id = u.id AND t.purpose = 'verify_email'
+                  AND t.used_at IS NULL AND t.expires_at > now()) AS pending_token_count,
+              (SELECT max(t.created_at) FROM "${EMAIL_TOKENS_TABLE}" t
+                WHERE t.user_id = u.id AND t.purpose = 'verify_email') AS last_token_sent_at
+       FROM "${USERS_TABLE}" u
+       ORDER BY u.created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+    return res.rows.map((r) => ({
+      id: r.id,
+      email: r.email,
+      displayName: r.display_name,
+      verifiedAt: r.verified_at ? toIso(r.verified_at) : null,
+      createdAt: r.created_at ? toIso(r.created_at) : null,
+      messageCount: Number(r.message_count ?? 0),
+      approvedMessageCount: Number(r.approved_message_count ?? 0),
+      lastSeenAt: r.last_seen_at ? toIso(r.last_seen_at) : null,
+      pendingTokenCount: Number(r.pending_token_count ?? 0),
+      lastTokenSentAt: r.last_token_sent_at ? toIso(r.last_token_sent_at) : null,
+    }));
+  } catch (err) {
+    noteFailure("[auth:pg] user list failed:", err);
+    return null;
+  }
+}
+
+/** Admin: force an account's email to verified (no token needed). Returns true
+ *  when a row was updated, false when it was already verified or missing. */
+export async function pgUserVerify(userId: string): Promise<boolean> {
+  await initPostgres();
+  if (!pool || !available) return false;
+  try {
+    const res = await pool.query(
+      `UPDATE "${USERS_TABLE}" SET verified_at = COALESCE(verified_at, now())
+       WHERE id = $1 AND verified_at IS NULL`,
+      [userId]
+    );
+    return (res.rowCount ?? 0) > 0;
+  } catch (err) {
+    noteFailure("[auth:pg] admin verify failed:", err);
     return false;
   }
 }
@@ -765,8 +866,6 @@ export async function pgAdminChatList(limit = 200): Promise<ChatMessageRow[]> {
 }
 
 // ---------- Email verification tokens --------------------------------------
-
-const EMAIL_TOKENS_TABLE = "email_tokens";
 
 export interface EmailTokenRow {
   id: string;

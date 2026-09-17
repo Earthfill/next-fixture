@@ -9,11 +9,13 @@ import { getUpcomingFixturesFresh, getPredictionReview } from "@/lib/cache/pages
 import { buildAvailableMatchdays } from "@/lib/football/service";
 import { getOverriddenSlugs } from "@/lib/admin-overrides";
 import { getHiddenSlugs } from "@/lib/hidden-fixtures";
+import { getUserStats } from "@/lib/auth";
 import { PROVIDER_IDS, PROVIDER_META, getActiveProviderId, providerHasKey } from "@/lib/football/providers";
 import JobRunner from "@/components/admin/JobRunner";
 import FixtureList from "@/components/admin/FixtureList";
 import ProviderControl from "@/components/admin/ProviderControl";
 import ChatModeration from "@/components/admin/ChatModeration";
+import RegisteredUsersCard from "@/components/admin/RegisteredUsersCard";
 import {
   Trophy, Calendar, BarChart3, RefreshCw, ExternalLink,
   DollarSign, Eye, Pencil, PenLine, CalendarDays, Sparkles, Server, TriangleAlert,
@@ -44,6 +46,10 @@ export default async function AdminPage() {
 
   // Which fixtures are hidden from the public site.
   const hiddenSlugs = await getHiddenSlugs();
+
+  // Registered-user counts (Postgres app_users). null = store unreachable, so
+  // the stats card can render "—" rather than a misleading 0.
+  const userStats = await getUserStats();
 
   const totalFixtures = fixtures.length;
   const totalMatchdays = matchdays.length;
@@ -95,7 +101,7 @@ export default async function AdminPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-8">
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
@@ -137,6 +143,8 @@ export default async function AdminPage() {
           <p className="text-2xl font-bold leading-none text-zinc-900">{totalEdited}</p>
           <p className="mt-1.5 text-xs font-medium text-zinc-500">Edited Previews</p>
         </div>
+        {/* Registered users — click to open the account drawer */}
+        <RegisteredUsersCard token={adminToken as string} stats={userStats} />
       </div>
 
       {/* Data Provider */}

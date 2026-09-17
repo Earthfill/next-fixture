@@ -1,13 +1,12 @@
 // POST /api/auth/resend-verification — re-email the verification link (login required)
-import { NextRequest, NextResponse } from "next/server";
-import { after } from "next/server";
+import { NextResponse } from "next/server";
 import { getSessionUser, createEmailToken } from "@/lib/auth";
-import { sendEmail } from "@/lib/email";
-import { verificationEmailHtml } from "@/lib/email-templates";
+import { sendEmailWithTimeout } from "@/lib/email";
+import { verificationEmailHtml, resolveEmailBaseUrl } from "@/lib/email-templates";
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   const user = await getSessionUser();
   if (!user) {
     return NextResponse.json({ error: "You must be logged in." }, { status: 401 });
@@ -24,15 +23,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const origin = request.nextUrl.origin;
-  const link = `${origin}/api/auth/verify?token=${encodeURIComponent(emailToken.token)}`;
-  after(() => {
-    void sendEmail({
-      to: user.email,
-      subject: "Verify your email — NextFixture",
-      html: verificationEmailHtml({ displayName: user.displayName, link }),
-    }).catch(() => undefined);
+  const baseUrl = resolveEmailBaseUrl();
+  const link = `${baseUrl}/api/auth/verify?token=${encodeURIComponent(emailToken.token)}`;
+  const result = await sendEmailWithTimeout({
+    to: user.email,
+    subject: "Verify your email — NextFixture",
+    html: verificationEmailHtml({ displayName: user.displayName, link, siteUrl: baseUrl }),
   });
+  if (!result.ok) {
+    const error = result.error === "timeout"
+      ? "The email service timed out. Please try again in a moment."
+      : result.error ?? "Could not send the verification email.";
+    return NextResponse.json({ error }, { status: 502 });
+  }
 
   return NextResponse.json({ success: true });
 }

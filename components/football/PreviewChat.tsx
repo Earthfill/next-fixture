@@ -7,10 +7,18 @@
 // reply composer, and polls every ~8s for near-live updates without needing a
 // websocket/broadcast provider. Author can remove their own messages.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { MessageSquare, Send, Lock, Reply, X, Trash2, Loader2, Mail } from "lucide-react";
 import { usePathname } from "next/navigation";
+import {
+  getAuthSnapshot,
+  loadCurrentUser,
+  notifyAuthChanged,
+  resendVerificationEmail,
+  subscribeAuth,
+  SERVER_AUTH_SNAPSHOT,
+} from "@/lib/auth-client";
 
 type ChatStatus = "approved" | "pending" | "removed";
 
@@ -31,14 +39,28 @@ interface ChatMessage {
   createdAt: string;
 }
 
-interface Me {
-  id: string;
-  displayName: string;
-  email: string;
-  verified: boolean;
-}
-
 const POLL_MS = 8000;
+
+// Anchor the "Chat" links in MatchdayList point at (/previews/<slug>#discussion).
+const DISCUSSION_ID = "discussion";
+
+// Next.js resolves a URL hash only once, immediately after the route commits
+// (see InnerScrollAndFocusHandler in next/dist/client/components/layout-router).
+// If the target mounts late, or the sections above it grow while images load,
+// the visitor is left at the top of the page with the hash already "handled".
+// So we re-apply the jump a handful of times over the first ~2s, and stop the
+// moment the reader takes over their own scrolling.
+const HASH_SCROLL_ATTEMPTS_MS = [0, 100, 250, 500, 1000, 1800];
+const USER_SCROLL_EVENTS = ["wheel", "touchstart", "keydown", "mousedown"] as const;
+
+/** Scroll to the discussion section when the URL is aimed at it. */
+function scrollToDiscussion(): void {
+  if (typeof window === "undefined") return;
+  if (window.location.hash !== `#${DISCUSSION_ID}`) return;
+  const target = document.getElementById(DISCUSSION_ID);
+  if (!target) return;
+  target.scrollIntoView({ block: "start" });
+}
 
 function timeAgo(iso: string): string {
   const then = new Date(iso).getTime();
@@ -54,7 +76,10 @@ function timeAgo(iso: string): string {
 }
 export default function PreviewChat({ slug }: { slug: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [me, setMe] = useState<Me | null>(null);
+  // Shared auth store — so posting-eligibility and the verify gate react to a
+  // login/verification that happened in another component without a reload.
+  const snapshot = useSyncExternalStore(subscribeAuth, getAuthSnapshot, () => SERVER_AUTH_SNAPSHOT);
+  const me = snapshot.user;
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
@@ -87,13 +112,8 @@ export default function PreviewChat({ slug }: { slug: string }) {
     // Defer the initial fetch so state updates land in async callbacks (keeps
     // the effect pure per react-hooks/set-state-in-effect).
     const initial = setTimeout(() => loadMessages(), 0);
-    // Determine logged-in state (a 401 simply resolves to null).
-    setTimeout(() => {
-      fetch("/api/auth/me", { cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : { user: null }))
-        .then((data) => mounted.current && setMe(data.user ?? null))
-        .catch(() => mounted.current && setMe(null));
-    }, 0);
+    // Determine logged-in state through the shared store (a 401 resolves to null).
+    void loadCurrentUser();
 
     const interval = setInterval(loadMessages, POLL_MS);
     const onFocus = () => loadMessages();
@@ -105,6 +125,39 @@ export default function PreviewChat({ slug }: { slug: string }) {
       window.removeEventListener("focus", onFocus);
     };
   }, [loadMessages]);
+
+  // Land the visitor on the discussion when they arrive via a "Chat" link
+  // (/previews/<slug>#discussion) — including when the hash was resolved before
+  // this section (or the images above it) finished laying out.
+  useEffect(() => {
+    let stopped = false;
+    let timers: Array<ReturnType<typeof setTimeout>> = [];
+
+    // A manual interaction means the reader has taken over: never yank them back.
+    const stop = () => {
+      stopped = true;
+      timers.forEach(clearTimeout);
+      timers = [];
+      USER_SCROLL_EVENTS.forEach((event) => window.removeEventListener(event, stop));
+    };
+
+    const runBurst = () => {
+      if (stopped) return;
+      timers.forEach(clearTimeout);
+      timers = HASH_SCROLL_ATTEMPTS_MS.map((delay) => setTimeout(scrollToDiscussion, delay));
+    };
+
+    USER_SCROLL_EVENTS.forEach((event) => window.addEventListener(event, stop, { passive: true }));
+    window.addEventListener("hashchange", runBurst);
+    runBurst();
+
+    return () => {
+      stopped = true;
+      timers.forEach(clearTimeout);
+      USER_SCROLL_EVENTS.forEach((event) => window.removeEventListener(event, stop));
+      window.removeEventListener("hashchange", runBurst);
+    };
+  }, []);
 
   const topLevel = useMemo(
     () => messages.filter((m) => !m.parentId),
@@ -137,7 +190,7 @@ export default function PreviewChat({ slug }: { slug: string }) {
       const data = await res.json();
       if (!res.ok) {
         setError(data?.error ?? "Could not post your message.");
-        if (res.status === 401) setMe(null);
+        if (res.status === 401) notifyAuthChanged(null);
         return;
       }
       if (data?.message) {
@@ -172,21 +225,13 @@ export default function PreviewChat({ slug }: { slug: string }) {
   async function handleResend() {
     setResending(true);
     setResendMessage(null);
-    try {
-      const res = await fetch("/api/auth/resend-verification", {
-        method: "POST",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setResendMessage("Verification email sent — check your inbox.");
-      } else {
-        setError(data?.error ?? "Could not resend the verification email.");
-      }
-    } catch {
-      setError("Could not resend the verification email.");
-    } finally {
-      setResending(false);
+    const result = await resendVerificationEmail();
+    if (result.ok) {
+      setResendMessage("Verification email sent — check your inbox.");
+    } else {
+      setError(result.error ?? "Could not resend the verification email.");
     }
+    setResending(false);
   }
 
   function renderMessage(msg: ChatMessage, isReply: boolean) {
@@ -253,7 +298,7 @@ export default function PreviewChat({ slug }: { slug: string }) {
   }
 
   return (
-    <section aria-label="Match discussion" className="mt-8" id="discussion">
+    <section aria-label="Match discussion" className="mt-8" id={DISCUSSION_ID}>
       <h2 className="sm-section-heading flex items-center gap-2">
         <MessageSquare className="h-4 w-4" />
         Match Discussion

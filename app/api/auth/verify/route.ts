@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
 import { verifyEmailToken, createSession } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
-import { welcomeEmailHtml } from "@/lib/email-templates";
+import { welcomeEmailHtml, resolveEmailBaseUrl } from "@/lib/email-templates";
 
 export const runtime = "nodejs";
 
@@ -23,12 +23,13 @@ export async function GET(request: NextRequest) {
   // The link proves ownership of the email — log the user in right away.
   await createSession(result.userId).catch(() => undefined);
 
-  // Welcome email, sent after the redirect response.
+  // Welcome email, sent after the redirect response. The logo and "Browse
+  // fixtures" link resolve to the public site, never this request's origin.
   after(() => {
     void sendEmail({
       to: result.email,
       subject: "Welcome to NextFixture",
-      html: welcomeEmailHtml({ displayName: result.displayName }),
+      html: welcomeEmailHtml({ displayName: result.displayName, siteUrl: resolveEmailBaseUrl() }),
     }).catch(() => undefined);
   });
 

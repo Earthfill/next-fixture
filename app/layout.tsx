@@ -6,6 +6,7 @@ import "./globals.css";
 import Header from "@/components/common/Header";
 import Footer from "@/components/common/Footer";
 import CookieConsentBanner from "@/components/common/CookieConsentBanner";
+import VerifyEmailBanner from "@/components/common/VerifyEmailBanner";
 import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({
@@ -84,6 +85,9 @@ export default function RootLayout({
         />
         <Analytics />
         <Header />
+        {/* Site-wide "you haven't verified your email yet" prompt. Renders
+            nothing unless a session exists with an unverified address. */}
+        <VerifyEmailBanner />
         <main className="flex-1 w-full">{children}</main>
         <Footer />
         <CookieConsentBanner />

@@ -25,7 +25,7 @@ function MatchRowSkeleton() {
       {/* Home team — name + crest (right aligned) */}
       <div className="flex items-center gap-2 w-[40%] justify-end min-w-0">
         <SkeletonBlock className="h-3.5 w-24 max-w-full" />
-        <SkeletonBlock className="h-[22px] w-[22px] shrink-0 rounded-full" />
+        <SkeletonBlock className="h-5.5 w-5.5 shrink-0 rounded-full" />
       </div>
 
       {/* VS */}
@@ -35,7 +35,7 @@ function MatchRowSkeleton() {
 
       {/* Away team — crest + name */}
       <div className="flex items-center gap-2 w-[40%] min-w-0">
-        <SkeletonBlock className="h-[22px] w-[22px] shrink-0 rounded-full" />
+        <SkeletonBlock className="h-5.5 w-5.5 shrink-0 rounded-full" />
         <SkeletonBlock className="h-3.5 w-24 max-w-full" />
       </div>
 

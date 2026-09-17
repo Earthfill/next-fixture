@@ -1,10 +1,9 @@
 // POST /api/auth/register — create an account, start a session, email a link
 import { NextRequest, NextResponse } from "next/server";
-import { after } from "next/server";
 import { hashPassword } from "@/lib/password";
 import { createUser, createSession, findUserByEmail, createEmailToken } from "@/lib/auth";
-import { sendEmail } from "@/lib/email";
-import { verificationEmailHtml } from "@/lib/email-templates";
+import { sendEmailWithTimeout } from "@/lib/email";
+import { verificationEmailHtml, resolveEmailBaseUrl } from "@/lib/email-templates";
 
 export const runtime = "nodejs";
 
@@ -47,22 +46,26 @@ export async function POST(request: NextRequest) {
 
   await createSession(user.id);
 
-  // Email a one-time verification link. Fire-and-forget AFTER the response is
-  // sent so a slow Resend call never delays registration.
+  // Email a one-time verification link. The link and the logo inside the email
+  // must point at the PUBLIC site — not this request's origin, which is
+  // localhost in dev and useless (actually broken) in a real recipient's inbox.
   const emailToken = await createEmailToken(user.id, user.email).catch(() => null);
   let verificationEmailSent = false;
+  let verificationEmailError: string | null = null;
   if (emailToken) {
-    const origin = request.nextUrl.origin;
-    const link = `${origin}/api/auth/verify?token=${encodeURIComponent(emailToken.token)}`;
-    verificationEmailSent = true;
-    after(() => {
-      void sendEmail({
-        to: user.email,
-        subject: "Verify your email — NextFixture",
-        html: verificationEmailHtml({ displayName: user.displayName, link }),
-      }).catch(() => undefined);
+    const baseUrl = resolveEmailBaseUrl();
+    const link = `${baseUrl}/api/auth/verify?token=${encodeURIComponent(emailToken.token)}`;
+    const result = await sendEmailWithTimeout({
+      to: user.email,
+      subject: "Verify your email — NextFixture",
+      html: verificationEmailHtml({ displayName: user.displayName, link, siteUrl: baseUrl }),
     });
+    verificationEmailSent = result.ok;
+    if (!result.ok) {
+      verificationEmailError = result.error ?? "Email delivery failed.";
+      console.warn(`[auth:register] verification email not delivered to ${user.email}: ${verificationEmailError}`);
+    }
   }
 
-  return NextResponse.json({ user, verificationEmailSent }, { status: 201 });
+  return NextResponse.json({ user, verificationEmailSent, verificationEmailError }, { status: 201 });
 }

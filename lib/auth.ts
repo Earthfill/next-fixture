@@ -14,6 +14,9 @@ import {
   pgUserCreate,
   pgUserFindByEmail,
   pgUserGetById,
+  pgUserStats,
+  pgUserList,
+  pgUserVerify,
   pgSessionCreate,
   pgSessionGet,
   pgSessionDelete,
@@ -22,6 +25,8 @@ import {
   pgEmailTokenMarkUsed,
   pgUserSetVerified,
 } from "@/lib/cache/postgres";
+
+import { countMemoryMessagesByUser } from "@/lib/preview-chat";
 
 const SESSION_COOKIE = "nf_session";
 const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
@@ -41,7 +46,7 @@ interface EmailTokenEntry {
 }
 
 // No-PG fallback stores (dev/standalone only).
-const memUsers = new Map<string, { id: string; email: string; displayName: string; passwordHash: string; verified?: boolean }>();
+const memUsers = new Map<string, { id: string; email: string; displayName: string; passwordHash: string; verified?: boolean; createdAt?: string }>();
 const memSessions = new Map<string, SessionEntry>();
 const memTokens = new Map<string, EmailTokenEntry>();
 
@@ -139,8 +144,122 @@ export async function createUser(data: {
     return { id, email: data.email, displayName: data.displayName, verified: false };
   }
   // No-PG fallback (registration is possible but ephemeral — for local dev only).
-  memUsers.set(id, { ...data, id, verified: false });
+  memUsers.set(id, { ...data, id, verified: false, createdAt: new Date().toISOString() });
   return { id, email: data.email, displayName: data.displayName, verified: false };
+}
+
+export interface UserStats {
+  /** Total registered accounts. */
+  total: number;
+  /** Accounts that have confirmed their email address. */
+  verified: number;
+  /**
+   * Accounts that registered but never confirmed their email. Derived by
+   * difference in the no-PG fallback (memUsers), and reported directly by
+   * pgUserStats (count of rows where verified_at IS NULL) when Postgres is up.
+   */
+  pending: number;
+}
+
+/**
+ * Aggregate registered-user counts for the admin dashboard.
+ * Returns null when the durable store cannot be reached, so the UI can show
+ * "unavailable" instead of a misleading zero.
+ */
+export async function getUserStats(): Promise<UserStats | null> {
+  await initPostgres();
+  if (pgAvailable()) {
+    const stats = await pgUserStats().catch(() => null);
+    if (!stats) return null;
+    return { ...stats, pending: Math.max(0, stats.total - stats.verified) };
+  }
+  // No-PG fallback (dev/standalone) — count the in-memory accounts.
+  const users = Array.from(memUsers.values());
+  const verified = users.filter((u) => !!u.verified).length;
+  return { total: users.length, verified, pending: users.length - verified };
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  displayName: string;
+  verified: boolean;
+  /** ISO timestamp the account was created (null when the store omits it). */
+  joinedAt: string | null;
+  /** Chat messages posted (any moderation status). */
+  messageCount: number;
+  /** Of those, the ones currently visible on the public site. */
+  approvedMessageCount: number;
+  /** Most recent login (session start), or null when unknown. */
+  lastSeenAt: string | null;
+  /** Unused, unexpired verification links the account can still click. */
+  pendingTokenCount: number;
+  /** When the most recent verification email was generated. */
+  lastTokenSentAt: string | null;
+}
+
+/**
+ * Registered accounts for the admin "Registered Users" drawer, newest first —
+ * including accounts that registered but never confirmed their email
+ * (`verified: false`). Returns null when the durable store cannot be reached so
+ * the UI can report "store unavailable" rather than an empty (misleading) list.
+ */
+export async function listUsers(limit = 200): Promise<AdminUser[] | null> {
+  await initPostgres();
+  if (pgAvailable()) {
+    const rows = await pgUserList(limit).catch(() => null);
+    if (!rows) return null;
+    return rows.map((u) => ({
+      id: u.id,
+      email: u.email,
+      displayName: u.displayName,
+      verified: !!u.verifiedAt,
+      joinedAt: u.createdAt,
+      messageCount: u.messageCount,
+      approvedMessageCount: u.approvedMessageCount,
+      lastSeenAt: u.lastSeenAt,
+      pendingTokenCount: u.pendingTokenCount,
+      lastTokenSentAt: u.lastTokenSentAt,
+    }));
+  }
+
+  // No-PG fallback (dev/standalone) — in-memory accounts + in-memory chat counts.
+  const chatCounts = countMemoryMessagesByUser();
+  return Array.from(memUsers.values())
+    .slice(0, limit)
+    .map((u) => {
+      const activity = chatCounts.get(u.id) ?? { total: 0, approved: 0 };
+      const pending = Array.from(memTokens.values()).filter(
+        (t) => t.userId === u.id && t.purpose === "verify_email" && !t.used && t.expiresAt > Date.now()
+      ).length;
+      return {
+        id: u.id,
+        email: u.email,
+        displayName: u.displayName,
+        verified: !!u.verified,
+        joinedAt: u.createdAt ?? null,
+        messageCount: activity.total,
+        approvedMessageCount: activity.approved,
+        // Sessions aren't tracked in the fallback store.
+        lastSeenAt: null,
+        pendingTokenCount: pending,
+        lastTokenSentAt: null,
+      };
+    });
+}
+
+/** Admin: force an account's email to verified without a token (e.g. the user
+ *  emailed support from the address). Returns true when an account changed. */
+export async function verifyUserByAdmin(userId: string): Promise<boolean> {
+  await initPostgres();
+  if (pgAvailable()) {
+    return pgUserVerify(userId).catch(() => false);
+  }
+  // No-PG fallback (dev/standalone).
+  const mem = memUsers.get(userId);
+  if (!mem || mem.verified) return false;
+  mem.verified = true;
+  return true;
 }
 
 /** Look up a user by email (for login). Handles both PG and no-PG fallback. */

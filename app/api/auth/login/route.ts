@@ -26,6 +26,13 @@ export async function POST(request: NextRequest) {
 
   await createSession(user.id);
   return NextResponse.json({
-    user: { id: user.id, email: user.email, displayName: user.displayName },
+    // `verified` lets the client show the verify prompt straight after signing
+    // in (an unverified account can log in, but cannot post).
+    user: {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      verified: user.verified,
+    },
   });
 }
