@@ -46,6 +46,21 @@ export async function POST(request: NextRequest) {
     ? await hideFixture(slug)
     : await unhideFixture(slug);
 
+  // The write did not land in Postgres. This is NOT a silent success — the
+  // match is still public, so tell the admin the truth instead of showing a
+  // "Hidden" badge that vanishes on refresh.
+  if (!persisted) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "The change could not be saved to the database. The match is still visible on the public site — please try again.",
+        persisted: false,
+        hiddenSlugs: Array.from(hidden),
+      },
+      { status: 502 }
+    );
+  }
+
   if (persisted && hidden.has(slug) !== shouldHide) {
     return NextResponse.json(
       {

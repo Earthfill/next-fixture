@@ -171,62 +171,72 @@ async function setHidden(slug: string, shouldHide: boolean): Promise<SetHiddenRe
   await initPostgres();
   const key = canonicalSlug(slug);
 
-  let persisted = false;
-  if (pgAvailable()) {
-    persisted = shouldHide
-      ? await pgHiddenAdd(key).catch(() => false)
-      : await pgHiddenRemove(key).catch(() => false);
-    if (persisted) {
-      await pgDrainPool();
-    }
-    if (!shouldHide) {
-      // A legacy row is stored under a different key, so the delete above found
-      // nothing and reported "not persisted" — sweep it and count that as the
-      // write, or /admin would show the un-hide as failed while it worked.
-      const swept = await removeLegacyRows(key);
-      if (swept) {
-        persisted = true;
-        await pgDrainPool();
-      }
-    }
-  }
-
   // Force the memory cache to re-read from PG right away (even on no-PG the
   // in-memory copy is still the only store, so we update it below).
   memorySet = null;
   memoryExpiresAt = 0;
 
-  if (pgAvailable()) {
-    // Bounded read-back: give a laggy replica a moment to catch up. A read that
-    // can't complete (PG down/slow) keeps the last known set — an empty set
-    // would tell the route the change never landed and re-publish the match.
-    let hidden: Set<string> = lastGoodSet ?? new Set<string>();
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const read = await readFromPg();
-      if (read) hidden = read;
-      const matches = hidden.has(key) === shouldHide;
-      if (matches) {
-        // Publish the confirmed set to the shared cross-instance snapshot so
-        // every serverless instance drops this match from its listings on the
-        // very next render instead of serving a stale process-local copy.
-        await writeCache(HIDDEN_SLUGS_KEY, Array.from(hidden), HIDDEN_SLUGS_TTL).catch(() => undefined);
-        return { hidden, persisted };
-      }
-      if (attempt < 4) {
-        await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
-      }
-    }
-    return { hidden, persisted };
+  if (!pgAvailable()) {
+    // No-PG fallback: update the process-local copy directly.
+    const next = new Set<string>(lastGoodSet ?? []);
+    if (shouldHide) next.add(key);
+    else next.delete(key);
+    refreshMemory([...next]);
+    // Also publish to the shared snapshot if any tier is reachable.
+    await writeCache(HIDDEN_SLUGS_KEY, Array.from(next), HIDDEN_SLUGS_TTL).catch(() => undefined);
+    return { hidden: next, persisted: true };
   }
 
-  // No-PG fallback: update the process-local copy directly.
-  const next = new Set<string>(memorySet ?? lastGoodSet ?? []);
-  if (shouldHide) next.add(key);
-  else next.delete(key);
-  refreshMemory([...next]);
-  // Also publish to the shared snapshot if any tier is reachable.
-  await writeCache(HIDDEN_SLUGS_KEY, Array.from(next), HIDDEN_SLUGS_TTL).catch(() => undefined);
-  return { hidden: next, persisted };
+  // PG is authoritative. Perform the write, retrying a few times for the common
+  // transient failures (pooler saturation, connect timeout). If it never lands,
+  // `writeSucceeded` stays false and the result reports persisted=false — the
+  // caller must surface an error instead of pretending the hide worked.
+  let writeSucceeded = false;
+  for (let attempt = 0; attempt < 3 && !writeSucceeded; attempt++) {
+    writeSucceeded = shouldHide
+      ? await pgHiddenAdd(key).catch(() => false)
+      : await pgHiddenRemove(key).catch(() => false);
+    if (writeSucceeded) {
+      await pgDrainPool();
+    } else if (attempt < 2) {
+      await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+    }
+  }
+
+  if (!shouldHide && !writeSucceeded) {
+    // A legacy row may be stored under a different key (e.g. the pre-ASCII
+    // "…münchen…" slugs), so the delete above found nothing and reported "not
+    // written". Sweep it — if a matching legacy row was removed, that IS the
+    // write succeeding.
+    const swept = await removeLegacyRows(key);
+    if (swept) {
+      writeSucceeded = true;
+      await pgDrainPool();
+    }
+  }
+
+  // Bounded read-back: give a laggy replica a moment to catch up. A read that
+  // can't complete (PG down/slow) keeps the last known set — an empty set
+  // would tell the route the change never landed and re-publish the match.
+  let hidden: Set<string> = lastGoodSet ?? new Set<string>();
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const read = await readFromPg();
+    if (read) hidden = read;
+    const matches = hidden.has(key) === shouldHide;
+    if (matches) {
+      // Publish the confirmed set to the shared cross-instance snapshot so
+      // every serverless instance drops this match from its listings on the
+      // very next render instead of serving a stale process-local copy.
+      await writeCache(HIDDEN_SLUGS_KEY, Array.from(hidden), HIDDEN_SLUGS_TTL).catch(() => undefined);
+      return { hidden, persisted: writeSucceeded };
+    }
+    if (attempt < 4) {
+      await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+    }
+  }
+  // Write attempted but never confirmed by a read-back (or the write itself
+  // failed). persisted only reports the verified case.
+  return { hidden, persisted: writeSucceeded };
 }
 
 /** Hide a fixture from the public site. */
