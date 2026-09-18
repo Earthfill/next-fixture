@@ -5,7 +5,7 @@
 // false and the cache-aside layer silently falls back to PostgreSQL (or the
 // in-memory store). The Next.js app must never crash over an unavailable cache.
 
-import Redis from "ioredis";
+import Redis, { type RedisOptions } from "ioredis";
 
 let redis: Redis | null = null;
 let available = false;
@@ -15,18 +15,45 @@ export function redisAvailable(): boolean {
   return available;
 }
 
+/** Parse REDIS_URL into explicit ioredis options (handles rediss:// with no port
+ * and passes TLS SNI servername, which the string-URL form can mishandle). */
+function parseRedisOptions(url: string): RedisOptions | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  const host = u.hostname;
+  if (!host) return null;
+  const opts: RedisOptions = {
+    host,
+    port: Number(u.port || 6379),
+  };
+  if (u.username) opts.username = u.username;
+  if (u.password) opts.password = u.password;
+  if (u.protocol === "rediss:") opts.tls = { servername: host };
+  return opts;
+}
+
 function getClient(): Redis | null {
   const url = process.env.REDIS_URL;
   if (!url) return null;
   if (redis) return redis;
 
-  redis = new Redis(url, {
+  const opts = parseRedisOptions(url);
+  if (!opts) return null;
+
+  redis = new Redis({
+    ...opts,
     lazyConnect: true,
     maxRetriesPerRequest: 1,
-    connectTimeout: 3000,
-    // Never keep retrying forever — mark unavailable and let the caller fall back.
-    retryStrategy: (times) => (times > 2 ? null : Math.min(times * 200, 1000)),
-  });
+    connectTimeout: 15000,
+    // Keep retrying with capped backoff so a hibernating DB (Layerbase cold-wakes
+    // take ~1-5s) reconnects instead of permanently killing Redis for this
+    // process. Bounded (~40-60s window) so serverless invocations don't hang.
+    retryStrategy: (times: number) => (times > 10 ? null : Math.min(times * 1000, 8000)),
+  } as RedisOptions);
 
   redis.on("connect", () => {
     available = true;
