@@ -5,8 +5,8 @@
 // ---------------------------------------------------------------------------
 
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
 import { isAdminAuthorized } from "@/lib/admin-auth";
+import { revalidatePreviewMutation } from "@/lib/revalidate";
 import {
   getAdminOverride,
   setAdminOverride,
@@ -140,23 +140,10 @@ export async function POST(request: NextRequest) {
   // pages so the next request re-renders from that data. This runs BEFORE the
   // read-back check below so it also executes when verification hesitates
   // (replica lag) — the write is durably committed on this side already.
+  // Revalidation uses the REAL preview path (/previews/<slug>) and also pokes
+  // the public site URL as a cross-instance fallback (see lib/revalidate).
   await invalidateCache(upcomingFixturesKey(UPCOMING_DAYS)).catch(() => undefined);
-  [
-    "/",
-    "/fixtures",
-    `/previews/${slug}`,
-  ].forEach((p) => {
-    try {
-      revalidatePath(p);
-    } catch {
-      // non-fatal
-    }
-  });
-  try {
-    revalidatePath("/", "layout");
-  } catch {
-    // non-fatal
-  }
+  await revalidatePreviewMutation(slug).catch(() => undefined);
 
   if (persisted) {
     let verified = false;
@@ -226,14 +213,7 @@ export async function DELETE(request: NextRequest) {
   // home page immediately (it is ISR-cached otherwise), and drop the cached
   // upcoming snapshot the homepage filters against so it refetches fresh data.
   await invalidateCache(upcomingFixturesKey(UPCOMING_DAYS)).catch(() => undefined);
-  try {
-    revalidatePath("/", "layout");
-    revalidatePath("/");
-    revalidatePath("/fixtures");
-    revalidatePath(`/previews/${slug}`);
-  } catch {
-    // non-fatal
-  }
+  await revalidatePreviewMutation(slug).catch(() => undefined);
 
   // Recompute review after removing the override (auto values are back).
   await invalidatePredictionReview(slug).catch(() => undefined);

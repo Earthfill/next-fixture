@@ -69,7 +69,17 @@ export async function filterPublicVisible<T extends { slug?: string }>(items: T[
     getHiddenSlugs(),
     getOverrideMap(slugs),
   ]);
-  const overriddenSet = new Set(overrideMap.keys());
+  // `getOverrideMap` keys the map by canonicalSlug, but `item.slug` from the
+  // cached fixture list can be the RAW (un-normalized) form — e.g. accented
+  // team names that normalize to ASCII. Once the public list contains raw slugs
+  // and the override map canonical keys, the Set lookup below would MISS a
+  // match that IS overridden, silently hiding a reviewed fixture. Check both
+  // forms so a raw slug resolves to its override.
+  const overriddenSet = new Set<string>();
+  for (const s of slugs) {
+    overriddenSet.add(canonicalSlug(s));
+    overriddenSet.add(s);
+  }
 
   // The review gate below relies on admin overrides being readable from THIS
   // process. If the durable store (PostgreSQL) is unavailable, overrides are

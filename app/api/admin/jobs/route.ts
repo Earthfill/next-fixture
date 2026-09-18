@@ -4,7 +4,6 @@
 // ---------------------------------------------------------------------------
 
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath, revalidateTag } from "next/cache";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { fetchNext7DaysFixtures } from "@/lib/jobs/midnight-fixtures";
 import { clearAllCaches } from "@/lib/cache";
@@ -13,6 +12,7 @@ import { getQuota, clearApiCache } from "@/lib/football/api";
 import { resetCoveredLeagues } from "@/lib/football/service";
 import { resetCircuitBreaker } from "@/lib/football/circuit-breaker";
 import { clearAllCache as clearLineupCache } from "@/lib/lineup-service";
+import { tryRevalidatePublicSite } from "@/lib/revalidate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,6 +39,9 @@ export async function POST(request: NextRequest) {
     switch (job) {
       case "fixtures": {
         result = await fetchNext7DaysFixtures();
+        // A fresh fixture list upstream means the listings may be stale; warm
+        // them now instead of waiting up to 5 minutes (ISR) for the homepage.
+        await tryRevalidatePublicSite().catch(() => undefined);
         break;
       }
       case "clear": {
@@ -55,12 +58,12 @@ export async function POST(request: NextRequest) {
         // stale sessions, used/expired email tokens).
         const cleanup = await runStaleDataCleanup().catch(() => null);
 
-        // 3. Next.js Full Route Cache (ISR) + Data Cache tags.
+        // 3. Next.js Full Route Cache (ISR) + Data Cache tags. Revalidate the
+        // listings AND the preview route so previously generated HTML (built
+        // before the clear) isn't served stale once the data cache is reset.
         let fullRouteCacheRevalidated = true;
         try {
-          revalidatePath("/", "layout");
-          revalidateTag("news", { expire: 0 });
-          revalidateTag("lineups", { expire: 0 });
+          await tryRevalidatePublicSite();
         } catch (err) {
           fullRouteCacheRevalidated = false;
           console.warn("[admin:jobs] revalidation failed:", err);

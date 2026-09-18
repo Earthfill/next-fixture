@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { fetchNext7DaysFixtures } from "@/lib/jobs/midnight-fixtures";
+import { tryRevalidatePublicSite } from "@/lib/revalidate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,10 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await fetchNext7DaysFixtures();
+    // The midnight prefetch wrote new fixture data; flush the ISR-cached
+    // listings so the homepage/fixtures pages drop stale HTML immediately
+    // instead of serving it for up to 5 minutes (their revalidate window).
+    await tryRevalidatePublicSite().catch(() => undefined);
     console.log("[cron:fixtures] done:", result);
     return NextResponse.json({ success: true, result });
   } catch (err) {

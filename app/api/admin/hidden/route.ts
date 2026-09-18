@@ -5,12 +5,12 @@
 // ---------------------------------------------------------------------------
 
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import { hideFixture, unhideFixture } from "@/lib/hidden-fixtures";
 import { normalizeSlug } from "@/lib/football/config";
 import { invalidateCache } from "@/lib/cache";
 import { upcomingFixturesKey, UPCOMING_DAYS } from "@/lib/cache/keys";
+import { revalidatePreviewMutation } from "@/lib/revalidate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,15 +65,7 @@ export async function POST(request: NextRequest) {
   // refetches a fresh list whose slugs match the one just stored. Same sequence
   // as /api/admin/override, whose edits are known to appear immediately.
   await invalidateCache(upcomingFixturesKey(UPCOMING_DAYS)).catch(() => undefined);
-  try {
-    revalidatePath("/", "layout");
-    revalidatePath("/");
-    revalidatePath("/fixtures");
-    revalidatePath("/fixtures/[date]", "page");
-    revalidatePath(`/previews/${slug}`);
-  } catch {
-    // non-fatal
-  }
+  await revalidatePreviewMutation(slug).catch(() => undefined);
 
   return NextResponse.json({ success: true, hidden: shouldHide, hiddenSlugs: Array.from(hidden), persisted });
 }

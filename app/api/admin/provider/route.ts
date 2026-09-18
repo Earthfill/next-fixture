@@ -6,7 +6,6 @@
 // ---------------------------------------------------------------------------
 
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath, revalidateTag } from "next/cache";
 import { isAdminAuthorized } from "@/lib/admin-auth";
 import {
   PROVIDER_IDS,
@@ -20,6 +19,7 @@ import { resetCoveredLeagues } from "@/lib/football/service";
 import { resetCircuitBreaker } from "@/lib/football/circuit-breaker";
 import { clearAllCache as clearLineupCache } from "@/lib/lineup-service";
 import { clearAllCaches } from "@/lib/cache";
+import { tryRevalidatePublicSite } from "@/lib/revalidate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,9 +76,10 @@ export async function POST(request: NextRequest) {
   })().catch(() => undefined);
 
   try {
-    revalidatePath("/", "layout");
-    revalidateTag("news", { expire: 0 });
-    revalidateTag("lineups", { expire: 0 });
+    // Flush the ISR Full Route Cache (listings + preview pages) so previously
+    // generated HTML from the OLD provider isn't served now that the data cache
+    // was wiped and will re-fetch from the NEW provider.
+    await tryRevalidatePublicSite();
   } catch {
     // non-fatal
   }
