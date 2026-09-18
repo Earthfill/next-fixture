@@ -18,7 +18,6 @@ import { cacheAside, writeCache, peekCache, invalidateCache } from "@/lib/cache"
 import { predictionReviewKey, standingsKey, upcomingFixturesKey, UPCOMING_DAYS, TTL } from "@/lib/cache/keys";
 import { getHiddenSlugs, isSlugHidden } from "@/lib/hidden-fixtures";
 import { getAdminOverride, getOverrideMap, type AdminOverride } from "@/lib/admin-overrides";
-import { initPostgres, pgAvailable } from "@/lib/cache/postgres";
 import { evaluatePrediction } from "@/lib/prediction-review";
 import { normalizeSlug } from "@/lib/football/config";
 
@@ -71,33 +70,27 @@ export async function filterPublicVisible<T extends { slug?: string }>(items: T[
   ]);
   // `getOverrideMap` keys the map by canonicalSlug, but `item.slug` from the
   // cached fixture list can be the RAW (un-normalized) form — e.g. accented
-  // team names that normalize to ASCII. Once the public list contains raw slugs
-  // and the override map canonical keys, the Set lookup below would MISS a
-  // match that IS overridden, silently hiding a reviewed fixture. Check both
-  // forms so a raw slug resolves to its override.
+  // team names that normalize to ASCII. Add BOTH forms for every slug that
+  // ACTUALLY has an override, so a raw slug still resolves to its override.
+  // (This must iterate `overrideMap.keys()`, NOT the input `slugs` — otherwise
+  // every fixture would look overridden and the review gate below would never
+  // hide a flagged match.)
   const overriddenSet = new Set<string>();
-  for (const s of slugs) {
+  for (const s of overrideMap.keys()) {
     overriddenSet.add(canonicalSlug(s));
     overriddenSet.add(s);
   }
 
-  // The review gate below relies on admin overrides being readable from THIS
-  // process. If the durable store (PostgreSQL) is unavailable, overrides are
-  // only visible in the process that wrote them (memory fallback) — an admin
-  // edit made on another instance would be invisible here and the reviewed
-  // match would be silently hidden on the public site. In that degraded state
-  // fall back to the pre-review-gate behavior: show everything except manually
-  // hidden matches. When the store is healthy the review gate still applies.
-  await initPostgres().catch(() => undefined);
-  if (!pgAvailable()) {
-    return items.filter((item) => {
-      if (!item.slug) return true;
-      return !manualHidden.has(canonicalSlug(item.slug));
-    });
-  }
-
-  // Resolve each fixture's review state from cached data — one memoized
-  // evaluation per fixture, reusing the override values read above.
+  // The review gate below must ALWAYS run, including when PostgreSQL just had a
+  // transient blip. `pgAvailable()` flips to false for a 30s cooldown after any
+  // pool-saturation/connection failure (see postgres.ts), and skipping the gate
+  // in that window re-publishes every review-flagged match on the public site —
+  // exactly the "hidden in admin but still on the homepage" bug. The review
+  // lookup reads ONLY cached data (Redis/PG preview + predreview entries) and
+  // never fires an upstream API call, so it is safe and cheap in every state.
+  // (Overrides are still resolved via the batched map above; if PG was down the
+  // map may be empty, and a not-yet-reviewed match staying hidden is the
+  // conservative, correct default.)
   const reviewBySlug = await getPredictionReviews(slugs, overrideMap);
 
   return items.filter((item) => {

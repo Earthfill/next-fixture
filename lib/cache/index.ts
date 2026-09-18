@@ -127,9 +127,15 @@ export async function peekCache<T>(key: string): Promise<T | null> {
       // fall through
     }
   }
-  if (pgAvailable()) {
-    return pgCacheGet<T>(key);
-  }
+  // ALWAYS try PostgreSQL, even when `pgAvailable()` is false. That flag is a
+  // 30s cooldown after a transient connection/pool failure, and gating reads on
+  // it made cached data unreadable (→ null → recompute) for the whole cooldown
+  // — which re-published review-flagged matches on listings. A cache read is
+  // idempotent: a transient read failure is just a miss, and the caller falls
+  // back to recomputing. `pgCacheGet` itself returns null on any query error.
+  const pgRow = await pgCacheGet<T>(key).catch(() => null);
+  if (pgRow !== null) return pgRow;
+
   return memoryGet<T>(key);
 }
 

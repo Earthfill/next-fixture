@@ -157,8 +157,15 @@ export function pgAvailable(): boolean {
 // ---------- Key/Value cache tier -------------------------------------------
 
 export async function pgCacheGet<T>(key: string): Promise<T | null> {
+  // Do NOT gate reads on the availability/cooldown flag (`available`). That
+  // flag is a 30s backoff after a transient pool-saturation/connection failure,
+  // and blocking reads for the whole cooldown made cached data (e.g. cached
+  // prediction-review flags) unreadable on listings — re-publishing
+  // review-flagged matches. A cache read is idempotent: a transient failure is
+  // just a miss (the caller recomputes). Re-create the pool if the last one was
+  // disposed by the cooldown; initPostgres() returns false while still cooling.
   await initPostgres();
-  if (!pool || !available) return null;
+  if (!pool) return null;
   try {
     const res = await pool.query(
       `SELECT payload FROM "${KV_TABLE}" WHERE cache_key = $1 AND expires_at > now()`,
