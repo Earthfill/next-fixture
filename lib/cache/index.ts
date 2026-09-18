@@ -9,7 +9,7 @@
 // Dynamic TTLs (see keys.ts): 24h schedules · 24h standings.
 // ---------------------------------------------------------------------------
 
-import { redisGet, redisSet, redisDel, redisClearPrefix } from "./redis";
+import { redisGet, redisMGet, redisSet, redisDel, redisClearPrefix } from "./redis";
 import {
   initPostgres,
   pgAvailable,
@@ -137,6 +137,50 @@ export async function peekCache<T>(key: string): Promise<T | null> {
   if (pgRow !== null) return pgRow;
 
   return memoryGet<T>(key);
+}
+
+/**
+ * Peek MANY cache keys in one batch. Uses a single Redis MGET for the hot tier
+ * (1 command instead of N), then fills any misses from PG/memory per key.
+ * Returns a Map of key → value; only keys that had a cached value are present.
+ */
+export async function peekCacheMany<T>(keys: string[]): Promise<Map<string, T>> {
+  await initPostgres();
+  const out = new Map<string, T>();
+  if (keys.length === 0) return out;
+
+  // 1. One batched Redis read for all keys.
+  const raw = await redisMGet(keys).catch(() => new Map<string, string | null>());
+  const missing: string[] = [];
+  for (const k of keys) {
+    const val = raw.get(k);
+    if (val == null) {
+      missing.push(k);
+      continue;
+    }
+    try {
+      out.set(k, JSON.parse(val) as T);
+    } catch {
+      missing.push(k); // corrupt payload → treat as a miss for the next tier
+    }
+  }
+
+  // 2. Per-key fallback (PG + memory) only for keys Redis didn't have.
+  if (missing.length > 0) {
+    await Promise.all(
+      missing.map(async (k) => {
+        const pg = await pgCacheGet<T>(k).catch(() => null);
+        if (pg !== null) {
+          out.set(k, pg);
+          return;
+        }
+        const mem = memoryGet<T>(k);
+        if (mem !== null) out.set(k, mem);
+      })
+    );
+  }
+
+  return out;
 }
 
 /** Write a value into every available tier (used by cron to seed caches). */

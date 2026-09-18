@@ -106,6 +106,21 @@ export async function redisGet(key: string): Promise<string | null> {
   }
 }
 
+/** Get many raw values in ONE round trip (returns a Map key→raw or null). */
+export async function redisMGet(keys: string[]): Promise<Map<string, string | null>> {
+  const client = await ensureConnected();
+  const out = new Map<string, string | null>();
+  if (!client) return out;
+  try {
+    const vals = await client.mget(...keys);
+    keys.forEach((k, i) => out.set(k, vals[i] ?? null));
+  } catch (err) {
+    available = false;
+    console.warn("[cache:redis] mget failed:", (err as Error).message);
+  }
+  return out;
+}
+
 /** Set a value in Redis with a TTL in seconds. Returns false when unavailable. */
 export async function redisSet(key: string, value: string, ttlSeconds: number): Promise<boolean> {
   const client = await ensureConnected();

@@ -14,7 +14,7 @@
 // NOTE: server-only module. Client components keep using @/lib/sports-api
 // (this module pulls in ioredis/pg, which must never enter the client bundle).
 
-import { cacheAside, writeCache, peekCache, invalidateCache } from "@/lib/cache";
+import { cacheAside, writeCache, peekCache, peekCacheMany, invalidateCache } from "@/lib/cache";
 import { predictionReviewKey, standingsKey, upcomingFixturesKey, UPCOMING_DAYS, TTL } from "@/lib/cache/keys";
 import { getHiddenSlugs, isSlugHidden } from "@/lib/hidden-fixtures";
 import { getAdminOverride, getOverrideMap, type AdminOverride } from "@/lib/admin-overrides";
@@ -407,12 +407,47 @@ async function getPredictionReviews(
   overrideMap: Map<string, AdminOverride>
 ): Promise<Map<string, PredictionReviewResult>> {
   const out = new Map<string, PredictionReviewResult>();
-  await Promise.all(
-    slugs.map(async (s) => {
-      const key = canonicalSlug(s);
-      out.set(key, await reviewFrom(key, async () => overrideMap.get(key) ?? null));
-    })
-  );
+  if (slugs.length === 0) return out;
+
+  const keys = slugs.map((s) => canonicalSlug(s));
+
+  // 1. Warm hits — already memoized in this process, no store round trip.
+  const memoKeys = new Set<string>();
+  for (const k of keys) {
+    const warm = memoizedReview(k);
+    if (warm) {
+      out.set(k, warm);
+      memoKeys.add(k);
+    }
+  }
+
+  // 2. One batched cache read for everything not memoized (single Redis MGET
+  // instead of ~N per-key GETs — the review fan-out that burned Redis commands).
+  const coldKeys = keys.filter((k) => !memoKeys.has(k));
+  if (coldKeys.length > 0) {
+    const cached = await peekCacheMany<PredictionReviewResult>(coldKeys);
+    const stillCold: string[] = [];
+    for (const k of coldKeys) {
+      const hit = cached.get(k);
+      if (hit) {
+        out.set(k, memoReview(k, hit));
+      } else {
+        stillCold.push(k);
+      }
+    }
+
+    // 3. Compute only the genuine misses (reads cached preview + override only;
+    // never fires an upstream API call).
+    if (stillCold.length > 0) {
+      await Promise.all(
+        stillCold.map(async (k) => {
+          const review = await computeReview(k, overrideMap.get(k) ?? null);
+          out.set(k, memoReview(k, review));
+        })
+      );
+    }
+  }
+
   return out;
 }
 
