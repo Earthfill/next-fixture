@@ -49,10 +49,14 @@ function previewPath(slug: string): string {
  */
 export async function tryRevalidatePublicSite(): Promise<void> {
   // Local invalidation: root layout + listing routes.
+  // NOTE: dynamic routes MUST pass the type ("page") — without it revalidatePath
+  // is a silent no-op (Next warns "type parameter is missing"). For non-dynamic
+  // routes passing "page" is the safe, explicit form.
   tryRevalidatePath("/", "layout");
-  ["/", "/fixtures", "/fixtures/[date]", "/previews/[slug]"].forEach((p) =>
-    tryRevalidatePath(p)
-  );
+  tryRevalidatePath("/", "page");
+  tryRevalidatePath("/fixtures", "page");
+  tryRevalidatePath("/fixtures/[date]", "page");
+  tryRevalidatePath("/previews/[slug]", "page");
   try {
     revalidateTag("news", { expire: 0 });
     revalidateTag("lineups", { expire: 0 });
@@ -84,8 +88,13 @@ export async function revalidatePreviewMutation(slug: string): Promise<void> {
   const slugPath = previewPath(slug);
 
   // 1. Local Full Route Cache invalidation (exact dynamic-segment path).
+  //    "page" type is REQUIRED for revalidatePath to take effect (dynamic
+  //    routes without it are silent no-ops).
   tryRevalidatePath("/", "layout");
-  [slugPath, "/", "/fixtures", "/fixtures/[date]"].forEach((p) => tryRevalidatePath(p));
+  tryRevalidatePath(slugPath, "page");
+  tryRevalidatePath("/", "page");
+  tryRevalidatePath("/fixtures", "page");
+  tryRevalidatePath("/fixtures/[date]", "page");
 
   // 2. Tag-based invalidation for any next-managed caches bound to this tag.
   try {
