@@ -40,3 +40,12 @@ export function predictionReviewKey(slug: string): string {
 /** Cached team index (slug → team + competitions) used by /teams/[slug]. */
 export const TEAMS_INDEX_KEY = "teams:index";
 export const TEAMS_INDEX_TTL = 24 * 60 * 60;
+
+// Cross-instance hidden-slugs snapshot. The hidden_fixtures table is Postgres-
+// only, but public renders cache the hidden set in process memory for up to
+// 30s per instance — which means a hide made on one serverless instance can
+// stay invisible on another long enough for the ISR-cached homepage (5 min) to
+// serve it. After every hide/unhide we write the fresh set to THIS shared key
+// (Redis/PG cache-aside), and getHiddenSlugs() prefers it over process memory.
+export const HIDDEN_SLUGS_KEY = "hidden:slugs";
+export const HIDDEN_SLUGS_TTL = 60; // seconds — short; only a coherence buffer

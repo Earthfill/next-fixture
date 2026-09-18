@@ -25,6 +25,8 @@ import {
   pgHiddenAdd,
   pgHiddenRemove,
 } from "@/lib/cache/postgres";
+import { writeCache, peekCache } from "@/lib/cache";
+import { HIDDEN_SLUGS_KEY, HIDDEN_SLUGS_TTL } from "@/lib/cache/keys";
 import { normalizeSlug } from "@/lib/football/config";
 
 /** Canonical fixture slug used as the hidden-store key (ASCII-safe). */
@@ -75,6 +77,10 @@ async function readFromPg(): Promise<Set<string> | null> {
     return null;
   }
   refreshMemory(slugs);
+  // Self-heal the shared cross-instance snapshot so a subsequent render doesn't
+  // have to hit this PG table again (and so warm instances pick up the freshest
+  // set even if no hide/unhide happened in this process).
+  await writeCache(HIDDEN_SLUGS_KEY, slugs, HIDDEN_SLUGS_TTL).catch(() => undefined);
   return memorySet;
 }
 
@@ -82,9 +88,21 @@ async function readFromPg(): Promise<Set<string> | null> {
 export async function getHiddenSlugs(): Promise<Set<string>> {
   await initPostgres();
 
-  // The freshness window is honoured for the last successfully read set too, so
-  // a failing store degrades to "same as last time" instead of a DB attempt on
-  // every single render.
+  // 1. Prefer the SHARED cross-instance snapshot. After any hide/unhide the
+  // fresh set is written here (Redis + PG cache-aside), so every serverless
+  // instance — not just the one that handled the write — sees it on its very
+  // next render instead of serving a process-local copy that can be up to 30s
+  // stale. This is what makes "hidden in admin" vanish from the homepage right
+  // away instead of lingering in warm instances.
+  const shared = await peekCache<string[]>(HIDDEN_SLUGS_KEY).catch(() => null);
+  if (Array.isArray(shared)) {
+    refreshMemory(shared);
+    return memorySet as Set<string>;
+  }
+
+  // 2. The freshness window is honoured for the last successfully read set too,
+  // so a failing store degrades to "same as last time" instead of a DB attempt
+  // on every single render.
   const lastKnown = memorySet ?? lastGoodSet;
   if (lastKnown && Date.now() < memoryExpiresAt) {
     return lastKnown;
@@ -95,7 +113,7 @@ export async function getHiddenSlugs(): Promise<Set<string>> {
     return lastKnown ?? new Set<string>();
   }
 
-  // Coalesce concurrent refreshes into a single PG call.
+  // 3. Coalesce concurrent refreshes into a single PG call.
   if (!inflight) {
     inflight = readFromPg().finally(() => {
       inflight = null;
@@ -187,7 +205,13 @@ async function setHidden(slug: string, shouldHide: boolean): Promise<SetHiddenRe
       const read = await readFromPg();
       if (read) hidden = read;
       const matches = hidden.has(key) === shouldHide;
-      if (matches) return { hidden, persisted };
+      if (matches) {
+        // Publish the confirmed set to the shared cross-instance snapshot so
+        // every serverless instance drops this match from its listings on the
+        // very next render instead of serving a stale process-local copy.
+        await writeCache(HIDDEN_SLUGS_KEY, Array.from(hidden), HIDDEN_SLUGS_TTL).catch(() => undefined);
+        return { hidden, persisted };
+      }
       if (attempt < 4) {
         await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
       }
@@ -200,6 +224,8 @@ async function setHidden(slug: string, shouldHide: boolean): Promise<SetHiddenRe
   if (shouldHide) next.add(key);
   else next.delete(key);
   refreshMemory([...next]);
+  // Also publish to the shared snapshot if any tier is reachable.
+  await writeCache(HIDDEN_SLUGS_KEY, Array.from(next), HIDDEN_SLUGS_TTL).catch(() => undefined);
   return { hidden: next, persisted };
 }
 
